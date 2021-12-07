@@ -72,7 +72,6 @@ def termination_condition(global_view):
                     utils.debug_pomset(ext_pom, join(test_path,  "pomext"))
                 # this condition is too restrictive, since we only need to check that the
                 # edge intersection is a partial order
-                # m = iso.GraphMatcher(pom2, ext_pom, nm)
                 m = iso.GraphMatcher(pom2, pom1, nm)
                 print("Sub isomorphism %s"% m.subgraph_is_isomorphic())
                 if not m.subgraph_is_isomorphic():

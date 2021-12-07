@@ -115,8 +115,6 @@ class Workspace:
         cc2res = cc2pom(cc2c, pomsets)
         i = 0
         for pm in cc2c:
-            # TODO: we should use the transitive reduction, but it does not work
-
             nx.readwrite.graphml.write_graphml(
                 pm, join(self.get_cc2_folder(), "closure", "%d.graphml" % i)
             )
@@ -280,7 +278,6 @@ class Workspace:
         cc3res = cc3pom(cc3c, prefixes)
         i = 0
 
-        # TODO: remove duplicates after
         for pm in cc3c:
             pm = pomset.transitive_reduction(pm)
             fix_pom_out = self.fix_cc3_counter_example(pm)
@@ -529,21 +526,6 @@ class MainWindow(Gtk.Window):
     def add_file_menu_actions(self, action_group):
         action_filemenu = Gtk.Action("FileMenu", "File", None, None)
         action_group.add_action(action_filemenu)
-
-        # action_filenewmenu = Gtk.Action("FileNew", None, None, Gtk.STOCK_NEW)
-        # action_group.add_action(action_filenewmenu)
-
-        # action_new = Gtk.Action("FileNewStandard", "_New",
-        #     "Create a new file", Gtk.STOCK_NEW)
-        # action_new.connect("activate", self.on_menu_file_new_generic)
-        # action_group.add_action_with_accel(action_new, None)
-
-        # action_group.add_actions([
-        #     ("FileNewFoo", None, "New Foo", None, "Create new foo",
-        #      self.on_menu_file_new_generic),
-        #     ("FileNewGoo", None, "_New Goo", None, "Create new goo",
-        #      self.on_menu_file_new_generic),
-        # ])
 
         action_filequit = Gtk.Action("FileQuit", None, None, Gtk.STOCK_QUIT)
         action_filequit.connect("activate", self.on_menu_file_quit)

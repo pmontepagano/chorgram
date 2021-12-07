@@ -98,10 +98,6 @@ def gen_all_choices(src):
             continue
         paths = gen_top_choices(graph)
         to_process = to_process + [(dict(list(path.items()) + list(p.items())), g) for (p, g) in paths]
-    # i = 0
-    # for (p, g) in res:
-    #     nx.readwrite.graphml.write_graphml(g, "graphs/aaa%d.graphml" % i)
-    #     i += 1
     return res
 
 def from_diff_to_graph(g1, g2, g3, diffs, brs):
@@ -148,7 +144,6 @@ def from_diff_to_graph(g1, g2, g3, diffs, brs):
             attrs["node-id"] = "%s-%s"%((2,node2))
             g.add_node((2,node2), **attrs)
 
-    # keep selected branches and merges
     all_mething_merges = []
     for b in brs:
         g.nodes[(1,b)]["kept"] = "1"

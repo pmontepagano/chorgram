@@ -14,21 +14,7 @@ def cc2closure(graphs):
     principals = get_all_principals(graphs[0])
     res = {}
     local_threads = get_principal_threads(graphs, principals)
-    # for p in local_threads:
-    #     i = 0
-    #     for t in local_threads[p]:
-    #         utils.debug_pomset(pomset.transitive_reduction(t), "/tmp/%s%d"%(p,i))
-    #         i += 1
     tuples = make_tuples(local_threads)
-    # i = 0
-    # for tpl in tuples:
-    #     principals = list(tpl.keys())
-    #     gr = tpl[principals[0]]
-    #     for p in principals[1:]:
-    #         gr = nx.union(gr, tpl[p])
-    #     utils.debug_pomset(pomset.transitive_reduction(gr), "/tmp/tmpl%d"%i)
-    #     i += 1
-
     ipc = inter_process_closure(tuples, True)
     return ipc
 
@@ -41,9 +27,6 @@ def cc2pom(ipc, graphs):
         for j in range(len(graphs)):
             g2 = graphs[j]
             g3 = transitive_closure(g2)
-            # m = iso.GraphMatcher(g1, g3, nm)
-            # # actually should not be a subgraph
-            # if m.subgraph_is_isomorphic():
             if pomset.is_more_permissive(g3, g1):
                 matches[i] = j
     return matches
@@ -87,10 +70,6 @@ def cc3pom(ipc, graphs):
                 continue
             g2 = graphs[j]
             g4 = transitive_closure(g2)
-            #g4 = g2
-            #m = iso.GraphMatcher(g1, g4, nm)
-            # actually should not be a subgraph
-            #if m.subgraph_is_isomorphic():
             if pomset.is_more_permissive(g4, g1):
                 matches[i] = j
                 break
@@ -104,4 +83,3 @@ def match_export(matches):
 def counterexamples(ipc, matches):
     errors = [ipc[k] for k in matches.keys() if matches[k] is None]
     return errors
-
