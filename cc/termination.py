@@ -1,12 +1,12 @@
 #!/usr/bin/python3
 import networkx as nx
 import networkx.algorithms.isomorphism as iso
-import pomset
+import cc.pomset
 import os
 from os import listdir
 from os.path import isfile, join
-from ccpom import *
-import utils
+from cc.ccpom import *
+import cc.utils
 
 keys = ["open", "close", "sender", "receiver", "payload"]
 
@@ -25,8 +25,6 @@ def termination_condition(global_view):
     errors = 0
     for p in principals:
         res[p] = []
-        print("------------------------------")
-        print("Principal %s" % p)
         for id_pom1 in range(len(global_view)):
             g_pom1 = global_view[id_pom1]
             for id_pom2 in range(len(global_view)):
@@ -46,8 +44,8 @@ def termination_condition(global_view):
 
                 print(id_pom1, id_pom2)
                 if debug:
-                    utils.debug_pomset(pom1, join(test_path,  "pom1"))
-                    utils.debug_pomset(pom2, join(test_path,  "pom2"))
+                    utils.debug_pomset(pom1, join(test_path, "pom1"))
+                    utils.debug_pomset(pom2, join(test_path, "pom2"))
                 
                 ext_pom = nx.DiGraph()
                 for n in pom1.nodes():
@@ -72,6 +70,7 @@ def termination_condition(global_view):
                     utils.debug_pomset(ext_pom, join(test_path,  "pomext"))
                 # this condition is too restrictive, since we only need to check that the
                 # edge intersection is a partial order
+                # m = iso.GraphMatcher(pom2, ext_pom, nm)
                 m = iso.GraphMatcher(pom2, pom1, nm)
                 print("Sub isomorphism %s"% m.subgraph_is_isomorphic())
                 if not m.subgraph_is_isomorphic():

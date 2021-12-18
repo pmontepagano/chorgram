@@ -2,11 +2,11 @@
 
 import networkx as nx
 import networkx.algorithms.isomorphism as iso
-from pomset import get_principal_threads, transitive_closure, get_all_principals
-from pomset import get_all_prefix_graphs
-from inter_closure import make_tuples, inter_process_closure
-import utils
-import pomset
+from cc.pomset import get_principal_threads, transitive_closure, get_all_principals
+from cc.pomset import get_all_prefix_graphs
+from cc.inter_closure import make_tuples, inter_process_closure
+import cc.utils
+import cc.pomset
 
 nm = iso.categorical_node_match(["subject", "partner", "in", "out"], ["", "", "", ""])
 
@@ -14,7 +14,21 @@ def cc2closure(graphs):
     principals = get_all_principals(graphs[0])
     res = {}
     local_threads = get_principal_threads(graphs, principals)
+    # for p in local_threads:
+    #     i = 0
+    #     for t in local_threads[p]:
+    #         utils.debug_pomset(pomset.transitive_reduction(t), "/tmp/%s%d"%(p,i))
+    #         i += 1
     tuples = make_tuples(local_threads)
+    # i = 0
+    # for tpl in tuples:
+    #     principals = list(tpl.keys())
+    #     gr = tpl[principals[0]]
+    #     for p in principals[1:]:
+    #         gr = nx.union(gr, tpl[p])
+    #     utils.debug_pomset(pomset.transitive_reduction(gr), "/tmp/tmpl%d"%i)
+    #     i += 1
+
     ipc = inter_process_closure(tuples, True)
     return ipc
 
@@ -27,7 +41,10 @@ def cc2pom(ipc, graphs):
         for j in range(len(graphs)):
             g2 = graphs[j]
             g3 = transitive_closure(g2)
-            if pomset.is_more_permissive(g3, g1):
+            # m = iso.GraphMatcher(g1, g3, nm)
+            # # actually should not be a subgraph
+            # if m.subgraph_is_isomorphic():
+            if cc.pomset.is_more_permissive(g3, g1):
                 matches[i] = j
     return matches
 
@@ -70,7 +87,11 @@ def cc3pom(ipc, graphs):
                 continue
             g2 = graphs[j]
             g4 = transitive_closure(g2)
-            if pomset.is_more_permissive(g4, g1):
+            #g4 = g2
+            #m = iso.GraphMatcher(g1, g4, nm)
+            # actually should not be a subgraph
+            #if m.subgraph_is_isomorphic():
+            if cc.pomset.is_more_permissive(g4, g1):
                 matches[i] = j
                 break
     return matches
@@ -83,3 +104,4 @@ def match_export(matches):
 def counterexamples(ipc, matches):
     errors = [ipc[k] for k in matches.keys() if matches[k] is None]
     return errors
+

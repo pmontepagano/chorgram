@@ -183,6 +183,31 @@ renamePtp old new ( states, q0, acts, trxs ) = ( states, q0, acts', trxs' )
         trxs' = S.map (\(q, act ,q') -> ( q, ract act, q' )) trxs
         aux p = if p == old then new else p
 
+-- predTrxRemoval :: CFSM -> (Action -> Bool) -> CFSM
+-- -- removes the transitions whose action satisfies the predicate lpred
+-- predTrxRemoval m@(states, q0, acts, trxs) lpred = (states, q0, acts, trxs')
+--   where trxs'   = S.difference (L.foldl S.union otrxs (L.map inherit pairs)) (S.filter (\(_,l,_) -> lpred l) trxs)
+--         otrxs   = S.filter (\(_, l, _) -> not(lpred l)) trxs
+--         pairs   = [ (q,q') | q <- S.toList states, q' <- S.toList states, not(q==q'), S.member q' (pClosure m lpred q) ]
+--         inherit = \(q1,q2) -> S.map (\(_, l, q') -> (q1, l, q')) (S.intersection otrxs (goutgoing m q2))
+
+-- flatSet :: Set State -> State
+-- -- turns a set of states into a state
+-- flatSet states = S.foldr ( \q q' -> (q ++ "__" ++ q') ) "" states 
+
+-- flat :: Graph (Set State) Action -> CFSM
+-- flat (states, q0, labels, trxs) =
+--   (S.map flatSet states, flatSet q0, labels, S.map (\(q, l, q') -> (flatSet q, l, flatSet q')) trxs)
+
+-- dActions :: CFSM -> State -> Dir -> Set LTrans
+-- dActions m q d = (S.filter (\( _, ( _, d', _ ), _ ) -> d == d') (step m q))
+
+-- sndActions :: CFSM -> State -> Set (Action, State)
+-- sndActions m q = S.map (\( _, e , q' ) -> ( e, q' )) (dActions m q Send)
+
+-- rcvActions :: CFSM -> State -> Set (Action, State)
+-- rcvActions m q = S.map (\( _, e , q' ) -> (e, q')) (dActions m q Receive)
+
 --
 -- Diamond Computations
 --
@@ -213,6 +238,8 @@ whitediamondRel cfsm@( _, _, _, trxs ) = Misc.equivalenceRelation q0
         setpairs = S.map (\( x, y, _ ) -> ( x, y )) trxs
         prod = Misc.cartProd setpairs setpairs
         --
+--        keep (s1,a1) (s2,a2) = 
+--           (oneStepTrans cfsm s1 s2) == oneStepTrans cfsm (succ cfsm s1 a1) (succ cfsm s2 a2)
           
 oneStepTrans :: CFSM -> State -> State -> Set Action
 oneStepTrans ( _, _, _, trxs ) s s' =
@@ -439,11 +466,7 @@ prettyDotAction ( (s,r), dir, msg ) flines pmap =
 printCFSM :: CFSM -> Ptp -> Map String String -> String
 printCFSM ( states, q0, _, trxs ) sbj flines =
   pstates ++ ptx
-  where pstates = "\t" ++ printState q0 sbj ++
-          "\t[style=" ++ (flines!q0style) ++
-          ", color=" ++ (flines!q0col) ++
-          "]\n" ++
-          S.foldr (++) "" (S.map (\x -> "\t" ++ (printState x sbj) ++ "\t[label = \"" ++ (replaceStateSep x (flines!statesep)) ++ "\"];\n") states)
+  where pstates = "\t" ++ printState q0 sbj ++ "\t[style=" ++ (flines!q0style) ++ ", color=" ++ (flines!q0col) ++ "]\n" ++ S.foldr (++) "" (S.map (\x -> "\t" ++ (printState x sbj) ++ "\t[label = \"" ++ (replaceStateSep x (flines!statesep)) ++ "\"];\n") states)
         ptx     = S.foldr (++) "" (
           S.map (\( s, act, t ) -> 
                   "\t" ++ (printState s sbj)

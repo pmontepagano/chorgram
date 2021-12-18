@@ -28,22 +28,7 @@ all:
 	$(MAKE) gc2dot_hs &&\
 	$(MAKE) gc2gml_hs &&\
 	$(MAKE) cg_hs
-#	$(MAKE) gcsem_hs &&\
-#	$(MAKE) handleND_hs &&\ (DEPRECATED)
-
-#
-# Examples of usage of scripts:
-# python cfsm2gc.py -l -df png -dir <path-to-results-directory> <path-to-file>
-# gc.py --dot "Tpng" --dot "Gsplines=ortho" --sloppy -dir <path-to-results-directory> <path-to-file>
-# cfsm2gc.py -sn -D det -dir /tmp ~/Dropbox/chorgram_experiments/gmc/bank > /tmp/b.txt
-# (DEPRECATED) # handleND -v -D det -d experiments/open_chor/ experiments/open_chor/ex4_1.fsa
-# gc2fsa ~/Dropbox/chorgram_experiments/examples_gc/two_buyers_protocol.gc > experiments/results/two_buyers_protocol/sys.fsa
-# gc2pom -l 2 --gml -d /tmp/ experiments/test/atm.gc
-# gc2gml -o t.x experiments/test/atm.gc 
-# pom2gc -d /tmp experiments/jlamp2020/csl7/cc3/closure/0.graphml 
-# gc2dot -d /tmp ~/Dropbox/chorgram_experiments/examples_gc/two_buyers_protocol.gc 
-# gc2dot -d /tmp/ -fmt gmldiff /tmp/t.graphml
-
+	$(MAKE) ptps_hs
 
 gmc_hs: gmc.hs SystemParser.hs FSA.hs CFSM.hs TS.hs Representability.hs Misc.hs DotStuff.hs BranchingProperty.hs PetrifyBridge.hs
 	$(ccmd) $<
@@ -93,17 +78,17 @@ wf_hs: wf.hs Misc.hs GCParser.hs WellFormedness.hs Misc.hs DotStuff.hs
 cg_hs: chorgram.hs Misc.hs
 	$(ccmd) $<
 
+ptps_hs: GCParser.hs Misc.hs
+	$(ccmd) $<
+
 
 debug:
 	$(ccdebug) gmc_hs &&\
 	$(ccdebug) BuildGlobal_hs &&\
 	$(ccdebug) GCParser_hs &&\
-#	$(ccdebug) KGparser_hs &&\
 	$(ccdebug) SystemParser_hs &&\
 	$(ccdebug) PomsetSemantics_hs &&\
 	$(ccdebug) gc_hs &&\
-#	$(ccdebug) handleND_hs &&\ (DEPRECATED)
-#	$(ccdebug) hgsem_hs &&\
 	$(ccdebug) sysparser_hs\
 	$(ccdebug) gc2pom_hs &&\
 	$(ccdebug) pom2gc_hs &&\

@@ -54,20 +54,28 @@ def analysis(inputfolder, outputfolder2, outputfolder3, outputfolder4, draw):
     elif len(cc3err) != 0:
         corrected_model = []
         nm = iso.categorical_node_match(["subject", "partner", "in", "out"], ["", "", "", ""])
+        # cc3c = [cc3c[1], cc3c[3]]
         for i in range(len(cc3c)):
             found = False
             pomset = cc3c[i]
+            # print("i:%d" % i)
+            # print(len(pomset))
             for j in range(len(cc3c)):
                 pomset1 = cc3c[j]
+                # print("j:%d" % j)
                 if pomset1 == pomset:
                     continue
                 prefixes = get_all_prefix_graphs(pomset1, False)
+                # print("prefixes %d"%len(prefixes))
                 for k in range(len(prefixes)):
+                    # print("k:%d" % k)
                     pomset2 = prefixes[k]
+                    #nx.readwrite.graphml.write_graphml(pomset2, join(inputfolder + "_corrected", "prefix-%d-%d.graphml" % (j,k)))
                     if (nx.is_isomorphic(pomset, pomset2, node_match=nm)):
                         found = True
                         break
                 if found:
+                    # print(found)
                     break
             if not found:
                 corrected_model.append(pomset)

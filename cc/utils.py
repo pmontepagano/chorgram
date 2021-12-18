@@ -3,7 +3,7 @@ import networkx as nx
 import os
 import itertools
 import shutil
-from pomset import transitive_reduction
+from cc.pomset import transitive_reduction
 
 def debug_graph(gr, name="G"):
     """Some documentation"""
@@ -31,6 +31,7 @@ def debug_graph(gr, name="G"):
             new_lines.append(l)
     open('%s.cluster.dot' % name, "w").write("\n".join(new_lines))
             
+    #os.system('dot -Tpdf %s.dot -o %s.pdf' % (name, name))
     os.system('dot -Tpng %s.cluster.dot -o %s.png' % (name, name))
     return ("%s.png" % name)
 

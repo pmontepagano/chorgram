@@ -1,7 +1,7 @@
 --
 -- Authors: Emilio Tuosto <emilio.tuosto@gssi.it>
 --
--- This main returns the graphml format of .sgg global graph.
+-- This main returns the graphml format of .gc file
 --
 
 import Misc

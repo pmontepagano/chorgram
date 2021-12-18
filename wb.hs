@@ -19,10 +19,12 @@ main = do
               case gcgrammar gctxt 0 0 of
                 Ok x -> x
                 Er err -> error err
+        -- let (chk, aw) = 
+        --       (wb gc, dependency (S.empty, S.empty) gc)
         let chk = 
               wb gc
         let verbose = not(flags!"-v" == "")
         case chk of
-          Nothing -> putStrLn $ "wb: OK"
+          Nothing -> putStrLn $ "wb: ok"
           Just err -> putStrLn ("wb: violation\n\t" ++ err)
 

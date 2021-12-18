@@ -37,7 +37,7 @@ main = do progargs <- getArgs
                         case gcgrammar gctxt 0 0 of
                           Ok x -> x
                           Er err -> error err
-                  output ("# Input @ " ++ sourcefile ++ "\n#\n# " ++ show gc)
+                  output ("# Input @ " ++ sourcefile ++ "\n\n# " ++ show gc)
                   output (gc2dot gc baseName flines)
                 "gml" -> do
                   xml <- readFile sourcefile
@@ -54,4 +54,3 @@ main = do progargs <- getArgs
                   output (xgml2dot baseName xml flines)
                 _ -> error ("ERROR: unknown format " ++ show (flags!"--fmt"))
 
-              

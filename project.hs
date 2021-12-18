@@ -62,11 +62,11 @@ main = do
               let cs =
                     case (flags!"--fmt") of
                       "fsa" -> L.map (\p -> CFSM.cfsm2String p (handleND $ proj gc "q0" "qe" p loops ptps_map)) ptps
-                      "dot" -> L.map (\(p,s) -> "\nsubgraph " ++ p ++ "{\n label=\"" ++ p ++ "\"\n" ++ s ++ "\n}")
-                        (L.map (\p -> (p, CFSM.prettyDotCFSM (handleND $ proj gc "q0" "qe" p loops ptps_map) p flines ptps_map)) ptps)
+                      "dot" -> --L.map (\(p,s) -> "\nsubgraph " ++ p ++ "{\n label=\"" ++ p ++ "\"\n" ++ s ++ "\n}")
+                        (L.map (\p -> CFSM.prettyDotCFSM (handleND $ proj gc "q0" "qe" p loops ptps_map) p flines ptps_map) ptps)
                       _ -> error $ msgFormat PROJ ("unknown format " ++ (flags!"--fmt"))
               in
-                pre ++ (L.foldr (++) "" cs) ++ post
+                L.foldr (++) "\n" cs
             else
               let aux p =
                     case L.elemIndex p ptps of
@@ -81,7 +81,7 @@ main = do
                             CFSM.prettyDotCFSM (handleND (proj gc "q0" "qe" p loops ptps_map)) p flines ptps_map
                           _ -> error $ msgFormat PROJ ("unknown format " ++ (flags!"--fmt"))
               in
-                L.foldl (\x y -> x ++ "\n\n" ++ (aux y)) "" ptp
+                (L.foldl (\x y -> x ++ "\n\n" ++ (aux y)) "" ptp)
       putStrLn (pre ++ output ++ post)
       if (flags!"-v" /= "")
         then do mapM_ (\(k,v) -> putStrLn $ (show k) ++ " |--> " ++ (show v)) (M.toList ptps_map)

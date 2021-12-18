@@ -1,11 +1,11 @@
 import networkx as nx
 import itertools
-from pomset import get_all_receive_lbls, get_all_send_lbls, get_matching_label
-from pomset import proj_lbl
-from pomset import transitive_closure
-from pomset import linearizations
-import utils
-import pomset
+from cc.pomset import get_all_receive_lbls, get_all_send_lbls, get_matching_label
+from cc.pomset import proj_lbl
+from cc.pomset import transitive_closure
+from cc.pomset import linearizations
+import cc.utils
+import cc.pomset
 
 import networkx.algorithms.isomorphism as iso
 
@@ -25,7 +25,7 @@ def make_tuples(local_threads):
     return tuples
 
 j = 0
-# several operations can be optimized. Bu we do not care.
+# several operaions can be optimized. Bu we do not care.
 def join_graph(gr, label):
     gps = []
     gr = transitive_closure(gr)
@@ -43,6 +43,9 @@ def join_graph(gr, label):
     all_lin2 = linearizations(gr2)
     
     for (lin1, lin2) in itertools.product(all_lin1, all_lin2):
+        #if len(lin1) != len(lin2):
+        #    print "number of events do not match"
+        #    return None
         new_gr = gr.copy()
         for i in range(min(len(lin1), len(lin2))):
             ev1 = lin1[i]
@@ -86,6 +89,8 @@ def inter_process_closure(tuples, complete):
         if not is_complete:
             if complete:
                 continue
+            #else:
+            #    print "Not complete", not_matched_out
 
         step = 0
         for l in inputs:
@@ -94,12 +99,14 @@ def inter_process_closure(tuples, complete):
                 break
             i = 0
             for gr1 in grs:
+                # utils.debug_pomset(gr1, "/tmp/ipc-tmp-%d-%d-%d"%(j, step, i))
                 i+=1
             step += 1
         i = 0
         if grs is not None:
             ipc = ipc + grs
             for new_gr in grs:
+                # utils.debug_pomset(pomset.transitive_reduction(new_gr), "/tmp/ipc%d-%d"%(j,i))
                 i+=1
         j+=1
 

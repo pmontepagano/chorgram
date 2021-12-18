@@ -1,5 +1,5 @@
 import networkx as nx
-from pomset import mins, proj
+from cc.pomset import mins, proj
 from os.path import isfile, join
 import os
 
@@ -56,30 +56,51 @@ def proj_to_cfsm(graphs, pr):
            automaton.nodes[nid]["terminating"] = is_state_terminating(id_to_pomsets[nid])
     return automaton
 
+# def export_projection(path, id_participant, projection):
+#     name = join(path, "%s"%(id_participant))
+#     try:
+#         os.makedirs(path)
+#     except:
+#         pass
+#     f = open("%s.dot"%name, "w")
+#     f.write("""
+# strict digraph "" {
+# 	graph [edge_default="{}",
+# 		node_default="{}"
+# 	];
+# 	node [label="\\N"];
+# """)
+#     for n in projection.nodes():
+#         attrs = 'label="%s"' % n
+#         if "terminating" in projection.nodes[n] and projection.nodes[n]["terminating"]:
+#             attrs+= ';style=dashed'
+#         f.write('node_%s\t[%s];\n'%(n, attrs))
+#     for (e1, e2) in projection.edges():
+#         label = attr_to_label(projection.edges[(e1, e2)])
+#         f.write('node_%s -> node_%s \t[label="%s"];\n'%(e1, e2,label))
+#     f.write('}\n')
+#     f.close()
+#     os.system('dot -Tpng %s.dot -o %s.png' % (name, name))
+#     return
+
 def export_projection(path, id_participant, projection):
     name = join(path, "%s"%(id_participant))
     try:
         os.makedirs(path)
     except:
         pass
-
-    f = open("%s.dot"%name, "w")
-    f.write("""
-strict digraph "" {
-	graph [edge_default="{}",
-		node_default="{}"
-	];
-	node [label="\\N"];
-""")
+    digraph = """strict digraph "" {\n\tgraph [edge_default="{}",\n\t\tnode_default="{}"\n\t];\n\tnode [label="\\N"];\n"""
     for n in projection.nodes():
         attrs = 'label="%s"' % n
         if "terminating" in projection.nodes[n] and projection.nodes[n]["terminating"]:
             attrs+= ';style=dashed'
-        f.write('node_%s\t[%s];\n'%(n, attrs))
+        digraph += '\tnode_%s\t[%s];\n'%(n, attrs)
     for (e1, e2) in projection.edges():
         label = attr_to_label(projection.edges[(e1, e2)])
-        f.write('node_%s -> node_%s \t[label="%s"];\n'%(e1, e2,label))
-    f.write('}\n')
+        digraph += '\tnode_%s -> node_%s \t[label="%s"];\n'%(e1, e2,label)
+    digraph += '}\n'
+    f = open("%s.dot"%name, "w")
+    f.write(digraph)
     f.close()
     os.system('dot -Tpng %s.dot -o %s.png' % (name, name))
     return
