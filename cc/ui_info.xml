@@ -1,0 +1,39 @@
+<ui>
+  <menubar name='MenuBar'>
+    <menu action='FileMenu'>
+      <menuitem action='FileOpenChoreography' />
+      <menuitem action='FileCosts' />
+      <menuitem action='FileQuit' />
+    </menu>
+    <menu action='GenerateMenu'>
+      <menuitem action='FileGenSemantics' />
+      <menu action='ProjectionMenu'>
+          <menuitem action='PomsetProjection' />
+          <menuitem action='GCProjection' />
+          <menuitem action='GCDeterminised' />
+          <menuitem action='GCIntermediate' />
+      </menu>
+    </menu>
+    <menu action='AnalysesMenu'>
+      <menu action='ClosureMenu'>
+        <menuitem action='CC2' />
+        <menuitem action='CC3' />
+        <menu action='CounterexampleMenu'>
+          <menuitem action='pom2gc' />
+          <menuitem action='sgc2diff' />
+        </menu>
+      </menu>
+      <separator />
+      <menu action='WellFormednessMenu'>
+        <menuitem action='WellSequencedness' />
+        <menuitem action='WellBranchedness' />
+        <menuitem action='WellForkedness' />
+      </menu>
+      <separator />
+      <menuitem action='Termination' />
+    </menu>
+  </menubar>
+  <toolbar name='ToolBar'>
+    <toolitem action='FileOpenChoreography' />
+  </toolbar>
+</ui>

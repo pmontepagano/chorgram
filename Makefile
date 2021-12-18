@@ -14,6 +14,7 @@ os := $(shell uname -s)
 gitmsg = "checkpoint"
 
 all:
+	$(MAKE) parser &&\
 	$(MAKE) gmc_hs &&\
 	$(MAKE) wb_hs &&\
 	$(MAKE) ws_hs &&\
@@ -78,7 +79,7 @@ wf_hs: wf.hs Misc.hs GCParser.hs WellFormedness.hs Misc.hs DotStuff.hs
 cg_hs: chorgram.hs Misc.hs
 	$(ccmd) $<
 
-ptps_hs: GCParser.hs Misc.hs
+ptps_hs: ptps.hs GCParser.hs Misc.hs
 	$(ccmd) $<
 
 
@@ -103,6 +104,8 @@ prof:
 
 clean:
 	@rm -f *~ *.o *.hi SystemParser.* GCParser.* KGparser.* gmc gc BuildGlobal sysparser $(cfgfile) *.info *.log
+	@rm -f BuildGlobal cfsm2gc chorgram gc2dot gc2fsa gc2gml gc2pom gmc pom2gc project ptps sysparser wb wf ws
+	@find . -name "*~" -exec rm -rf {} \;
 	$(info >>> cleaning done.)
 
 parser:
