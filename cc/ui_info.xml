@@ -15,6 +15,12 @@
       </menu>
     </menu>
     <menu action='AnalysesMenu'>
+      <menu action='WellFormednessMenu'>
+        <menuitem action='WellBranchedness' />
+        <menuitem action='WellSequencedness' />
+        <menuitem action='WellForkedness' />
+      </menu>
+      <separator />
       <menu action='ClosureMenu'>
         <menuitem action='CC2' />
         <menuitem action='CC3' />
@@ -22,12 +28,6 @@
           <menuitem action='pom2gc' />
           <menuitem action='sgc2diff' />
         </menu>
-      </menu>
-      <separator />
-      <menu action='WellFormednessMenu'>
-        <menuitem action='WellSequencedness' />
-        <menuitem action='WellBranchedness' />
-        <menuitem action='WellForkedness' />
       </menu>
       <separator />
       <menuitem action='Termination' />
