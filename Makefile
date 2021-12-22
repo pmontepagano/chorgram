@@ -13,8 +13,35 @@ logfile = $(logdir)/experiments.log
 os := $(shell uname -s)
 gitmsg = "checkpoint"
 
+setup:
+	@if test -e aux/experiments; then echo ">>> The directory experiments is already there. Nothing to be done."; else make -C aux/experiments; echo ">>> directory experiments created"; fi
+	make config
+	make parser
+	make all
+
+config:
+	@echo "experiments\t"$(experimentsdir) > $(cfgdir)/$(cfgfile)
+	$(info .)
+	@echo "logfile\t"$(logfile) >> $(cfgdir)/$(cfgfile)
+	$(info ..)
+	@echo "hkc\t"$(hkcpath) >> $(cfgdir)/$(cfgfile)
+	$(info ...)
+	@echo "petrify\t"$(petripath) >> $(cfgdir)/$(cfgfile)
+	$(info ....)
+	@echo "gmc\t./gmc" >> $(cfgdir)/$(cfgfile)
+	$(info .....)
+	@echo "bg\t./BuildGlobal" >> $(cfgdir)/$(cfgfile)
+	$(info ......)
+	@echo "logfilename\t"$(logfile) >> $(cfgdir)/$(cfgfile)
+	$(info ......)
+	@echo "dot\taux/dot.cfg" >> $(cfgdir)/$(cfgfile)
+	$(info >>> config file created $(cfgdir)/$(cfgfile))
+
+parser:
+	happy -a -i  GCGrammar.y -o GCParser.hs && $(ccmd) GCParser.hs
+	happy -a -i  SystemGrammar.y -o SystemParser.hs && $(ccmd) SystemParser.hs
+
 all:
-	$(MAKE) parser &&\
 	$(MAKE) gmc_hs &&\
 	$(MAKE) wb_hs &&\
 	$(MAKE) ws_hs &&\
@@ -32,6 +59,30 @@ all:
 	$(MAKE) ptps_hs
 	$(MAKE) gents_hs
 
+showconfig:
+	clear
+	@echo cfgdir=$(cfgdir)
+	@echo hkcpath=$(hkcpath)
+	@echo petripath=$(petripath)
+	@echo experimentsdir=$(experimentsdir)
+	@echo logfile=$(logfile)
+
+hp:
+	@if test -e $(hkcpath)/hkc; then echo ">>> The binary of hkc is already there. Nothing to be done."; else make -C $(hkcpath); echo ">>> hkc compiled"; fi
+	@if test -e $(hkcpath)/hkc$(os); then echo ">>> The link to hkc is already there. Nothing to be done."; else (cd $(hkcpath); ln -s hkc hkc$(os)) ; echo ">>> link to petrify added"; fi
+	@if test -e $(petripath)/petrify$(os); then echo ">>> The link to petrify is already there. Nothing to be done."; else (cd $(petripath); ln -s petrify petrify$(os)); fi
+
+
+git:
+	git pull
+	git commit -am $(gitmsg) && git push
+
+clean:
+	@rm -f *~ *.o *.hi SystemParser.* GCParser.* KGparser.* gmc gc BuildGlobal sysparser $(cfgfile) *.info *.log
+	@rm -f BuildGlobal cfsm2gc chorgram gc2dot gc2fsa gc2gml gc2pom gmc pom2gc project ptps sysparser wb wf ws
+	@find . -name "*~" -exec rm -rf {} \;
+	$(info >>> cleaning done.)
+
 gmc_hs: gmc.hs SystemParser.hs FSA.hs CFSM.hs TS.hs Representability.hs Misc.hs DotStuff.hs BranchingProperty.hs PetrifyBridge.hs
 	$(ccmd) $<
 
@@ -46,9 +97,6 @@ PetriNet_hs: PetriNet.hs Misc.hs
 
 sysparser_hs: sysparser.hs SystemParser.hs
 	$(ccmd) $<
-
-# handleND_hs: handleND.hs Misc.hs FSA.hs CFSM.hs DotStuff.hs SystemParser.hs
-# 	$(ccmd) $<
 
 gc2pom_hs: gc2pom.hs Misc.hs GCParser.hs PomsetSemantics.hs
 	$(ccmd) $<
@@ -85,76 +133,3 @@ ptps_hs: ptps.hs GCParser.hs Misc.hs
 
 gents_hs: gents.hs GCParser.hs Misc.hs
 	$(ccmd) $<
-
-debug:
-	$(ccdebug) gmc_hs &&\
-	$(ccdebug) BuildGlobal_hs &&\
-	$(ccdebug) GCParser_hs &&\
-	$(ccdebug) SystemParser_hs &&\
-	$(ccdebug) PomsetSemantics_hs &&\
-	$(ccdebug) gc_hs &&\
-	$(ccdebug) sysparser_hs\
-	$(ccdebug) gc2pom_hs &&\
-	$(ccdebug) pom2gc_hs &&\
-	$(ccdebug) gc2fsa_hs &&\
-	$(ccmd) gc2dot_hs &&\
-	$(ccdebug) gc2gml_hs
-	$(ccdebug) wb_hs
-
-# To get the stack trace, add +RTS -xc at the end of the gmc or BuildGlobal command
-prof:
-	$(ccmd) $(profiling) gmc.hs && ghc --make  $(profiling) BuildGlobal.hs
-
-clean:
-	@rm -f *~ *.o *.hi SystemParser.* GCParser.* KGparser.* gmc gc BuildGlobal sysparser $(cfgfile) *.info *.log
-	@rm -f BuildGlobal cfsm2gc chorgram gc2dot gc2fsa gc2gml gc2pom gmc pom2gc project ptps sysparser wb wf ws
-	@find . -name "*~" -exec rm -rf {} \;
-	$(info >>> cleaning done.)
-
-parser:
-	happy -a -i  GCGrammar.y -o GCParser.hs && $(ccmd) GCParser.hs
-	happy -a -i  SystemGrammar.y -o SystemParser.hs && $(ccmd) SystemParser.hs
-
-config:
-	@echo "experiments\t"$(experimentsdir) > $(cfgdir)/$(cfgfile)
-	$(info .)
-	@echo "logfile\t"$(logfile) >> $(cfgdir)/$(cfgfile)
-	$(info ..)
-	@echo "hkc\t"$(hkcpath) >> $(cfgdir)/$(cfgfile)
-	$(info ...)
-	@echo "petrify\t"$(petripath) >> $(cfgdir)/$(cfgfile)
-	$(info ....)
-	@echo "gmc\t./gmc" >> $(cfgdir)/$(cfgfile)
-	$(info .....)
-	@echo "bg\t./BuildGlobal" >> $(cfgdir)/$(cfgfile)
-	$(info ......)
-	@echo "logfilename\t"$(logfile) >> $(cfgdir)/$(cfgfile)
-	$(info ......)
-	@echo "dot\taux/dot.cfg" >> $(cfgdir)/$(cfgfile)
-	$(info >>> config file created $(cfgdir)/$(cfgfile))
-
-showconfig:
-	clear
-	@echo cfgdir=$(cfgdir)
-	@echo hkcpath=$(hkcpath)
-	@echo petripath=$(petripath)
-	@echo experimentsdir=$(experimentsdir)
-	@echo logfile=$(logfile)
-
-hp:
-	@if test -e $(hkcpath)/hkc; then echo ">>> The binary of hkc is already there. Nothing to be done."; else make -C $(hkcpath); echo ">>> hkc compiled"; fi
-	@if test -e $(hkcpath)/hkc$(os); then echo ">>> The link to hkc is already there. Nothing to be done."; else (cd $(hkcpath); ln -s hkc hkc$(os)) ; echo ">>> link to petrify added"; fi
-	@if test -e $(petripath)/petrify$(os); then echo ">>> The link to petrify is already there. Nothing to be done."; else (cd $(petripath); ln -s petrify petrify$(os)); fi
-
-setup:
-	@if test -e aux/experiments; then echo ">>> The directory experiments is already there. Nothing to be done."; else make -C aux/experiments; echo ">>> directory experiments created"; fi
-	make config
-	make parser
-	make all
-
-e:
-	e -T $(title) gmc.hs &
-
-git:
-	git pull
-	git commit -am $(gitmsg) && git push
