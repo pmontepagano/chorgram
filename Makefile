@@ -30,6 +30,7 @@ all:
 	$(MAKE) gc2gml_hs &&\
 	$(MAKE) cg_hs
 	$(MAKE) ptps_hs
+	$(MAKE) gents_hs
 
 gmc_hs: gmc.hs SystemParser.hs FSA.hs CFSM.hs TS.hs Representability.hs Misc.hs DotStuff.hs BranchingProperty.hs PetrifyBridge.hs
 	$(ccmd) $<
@@ -82,6 +83,8 @@ cg_hs: chorgram.hs Misc.hs
 ptps_hs: ptps.hs GCParser.hs Misc.hs
 	$(ccmd) $<
 
+gents_hs: gents.hs GCParser.hs Misc.hs
+	$(ccmd) $<
 
 debug:
 	$(ccdebug) gmc_hs &&\

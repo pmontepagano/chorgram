@@ -34,6 +34,7 @@ representabilityThread system ts var = do
   let repbra = repBranching system ts
   putMVar var repbra
       
+-- branchingPropertyThread ::  System -> TS -> MVar Bool -> IO ()
 branchingPropertyThread ::  System -> TSb -> MVar [Cause Configuration KEvent] -> IO ()
 branchingPropertyThread system ts var = do
       let braprop = checkBranchingProperty system ts
@@ -46,6 +47,16 @@ printingThread system ts@(confs, _, _, _) filename flines var = do
   system2file filename ".dot" flines system
   writeToFile (filename ++ "_toPetrify") (ts2petrify (renameNodes sigma ts) (flines!qsep))
   putMVar var True
+
+-- parseSystem :: String -> String -> System
+-- parseSystem ext txt =
+--   -- if 'ext' is a valid extension (.fsa, .sys, .cms), returns the parsing of txt as a system of CFSMs 
+--   case ext of
+--     ".fsa" -> parseFSA (Prelude.map (\x -> words x) (lines txt))
+--     ".sys" -> (sysgrammar . lexer) txt
+--     ".cms" -> (sysgrammar . lexer) txt
+--     ""     -> parseFSA (Prelude.map (\x -> words x) (lines txt))
+--     _      -> error ("unknown extension " ++ ext)
 
 main :: IO ()
 main =  do progargs <- getArgs
@@ -70,8 +81,7 @@ main =  do progargs <- getArgs
                      (if (M.member "-sn" flags)
                       then (L.map (\cfsm -> (grenameVertex (sigma cfsm) cfsm)) sys')
                       else sys', ptps)
-               createDirectoryIfMissing True dir
-               writeToFile (dir ++ ".machines") (rmChar '\"' $ show $ L.foldr (\x y -> x ++ (if y=="" then "" else " ") ++ y) "" (cfsmsIds system)) -- (L.map snd (M.assocs $ snd system)))
+               writeToFile (dir ++ ".machines") (rmChar '\"' $ show $ L.foldr (\x y -> x ++ (if y=="" then "" else " ") ++ y) "" (cfsmsIds system))
                let bufferSize =
                      read (flags ! "-b") :: Int
                let fifo = not (M.member "-nf" flags)
@@ -106,7 +116,17 @@ main =  do progargs <- getArgs
                     myPrint flags GMC ("Branching Property (part (ii)):\t" ++ (rmChar '\"' $ show v2))
                     _ <- takeMVar proj
                     _ <- takeMVar prnt
+                    -- TODO: colour bad states
                     ts2file destfile sourcefile 0 fifo system ts0 flags v2 v1
                     ts2file destfile sourcefile (read (flags ! "-b") :: Int) fifo system tsb flags v2 v1
                     when (isEmpty ts0) $ myPrint flags GMC "(!)  Warning: the TS appears to be empty, synthesis will fail    (!)"
                     when (not(noSelfLoop ts0)) $ myPrint flags GMC "(!)  Warning: the TS contains a self-loop, synthesis might fail  (!)"
+--
+                    -- let output l =
+                    --       let fname i = (mkFileName (ptps!i) dir "cfsm" ".aut") in
+                    --       case l of
+                    --        []   -> return ()
+                    --        i:ls -> writeToFile (fname i) (cfsm2bcg (cfsms!!i) flines) >>= (\_ -> output ls)
+                    -- output $ range (L.length cfsms)
+--
+--           putStrLn "±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±± gmc ±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±"

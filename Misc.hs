@@ -27,6 +27,7 @@ data Command =
   | PROJ
   | PTPS
   | GC2POM
+  | GENTS
   | POM2GC
   | GC2GML
   | SYS
@@ -97,10 +98,10 @@ list2map l = M.fromList [(p,l!!p) | p <- [0 .. (L.length l) - 1 ] ]
 inv :: (Ord a, Ord b) => Map a b -> Map b a
 inv m = M.fromList $ (L.zip (M.elems m) (M.keys m))
 
-findId :: (Eq a, Show a, Show k) => a -> [(k, a)] -> k
-findId e m = case m of
+getId :: (Eq a, Show a, Show k) => a -> [(k, a)] -> k
+getId e m = case m of
               []        -> error ("Element " ++ show e ++ " not in the map " ++ show m)
-              (i,e'):ms -> if e==e' then i else (findId e ms)
+              (i,e'):ms -> if e==e' then i else (getId e ms)
 
 isSublist :: (Eq a) => [a] -> [a] -> Bool
 isSublist l1 l2 =
@@ -280,8 +281,10 @@ info =
   (GMC, ["given a communicating system checks for its generalised multiparty compatibility",
          "[-c configfile] [-b bound] [-l] [-m multiplicity] [-sn] [-D detmode] [-d dirpath] [-ts] [-nf] [-cp cpattern] [-tp tpattern] [-v] filename",
          "default: configfile = ./aux/chorgram.config",
-         "\t bound = 0",
+         "\t bound of buffers; default bound = 0",
          "\t mutiplicity = 0    (deprecated)",
+         "\t -sn standard names of states ('q'<int>)",
+         "\t -nf disable FIFO semantics",
          "\t dirpath = " ++ dirpath,
          "\t fontsize = 8",
          "\t cpattern = \"\"",
@@ -297,7 +300,7 @@ info =
         "[-d dirpath] [-l] [--sloppy] filename [-rg]",
         "default: dirpath = " ++ dirpath,
         "\t --sloppy: suppresses the check for well-formedness; set by default",
-        "\t -l: adds a legend to dot; not set by default"
+        "\t -l: adds a legend; not set by default"
        ]
   ),
   (GC2DOT, ["returns the dot format of a g-choreography",
@@ -323,7 +326,7 @@ info =
          ]
   ),
   (PTPS, ["returns the list of participants of a g-choreography",
-          "[-v] filename",
+          "ptps [-v] filename",
             "\t -v diplays the mapping index |--> ptp"
          ]
   ),
@@ -332,6 +335,16 @@ info =
             "default: dirpath = " ++ dirpath,
             "\t --fmt hs   generates the haskell representation, otherwise the graphml format",
             "\t iter = 1   this is the unfolding depth of loops"
+           ]
+  ),
+  (GENTS, ["computes transition systems of a g-choreography",
+            "gc2pom [-b bound] [-sn] [-nf] [--fmt (cms | fsa)] [-D (min | det | no)] [-l] [-v] filename",
+            "default: -b bound of buffers; default bound = 0",
+            "\t -sn standard names of states (q<int>); not set by default",
+            "\t -nf disable FIFO semantics",
+            "\t --fmt system in fsa or cms format; default --fmt fsa",
+            "\t -D select minimisation, determinisation, or nothing; default -D no",
+            "\t -l: adds a legend; not set by default"
            ]
   ),
   (POM2GC, ["computes the g-choreography of a pomset (if any)",
@@ -418,6 +431,7 @@ cmdName cmd =
     GC2FSA -> "gc2fsa"
     PROJ   -> "project"
     GC2POM -> "gc2pom"
+    GENTS  -> "gents"
     POM2GC -> "pom2gc"
     GC2GML -> "gc2gml"
     SYS    -> "systemparser"
@@ -456,6 +470,7 @@ defaultFlags cmd =
                  PROJ   -> [("-D","no"), ("-u", "-1"), ("--fmt", "fsa")]
                  PTPS   -> []
                  GC2POM -> [("--fmt", "hs"), ("-u","1")]
+                 GENTS  -> [("--fmt", "fsa"), ("-b", "0"), ("-D","no")]
                  POM2GC -> []
                  GC2GML -> [("-u","1")] -- '-l' unfolding of loops
                  SYS    -> []
@@ -585,6 +600,16 @@ getFlags cmd args =
       "-u":y:xs    -> M.insert "-u" y    (getFlags cmd xs)
       "-v":xs      -> M.insert "-v" yes  (getFlags cmd xs)
       _            -> error $ usage(cmd)
+    GENTS  -> case args of
+      []           -> defaultFlags(cmd)
+      "--fmt":y:xs -> M.insert "--fmt" y  (getFlags cmd xs)
+      "-D":y:xs    -> M.insert "-D" y     (getFlags cmd xs)
+      "-sn":xs     -> M.insert "-sn" yes  (getFlags cmd xs)
+      "-nf":xs     -> M.insert "-nf" "no" (getFlags cmd xs) -- turns off the fifo policy
+      "-b":y:xs    -> M.insert "-b" y     (getFlags cmd xs)
+      "-l":xs      -> M.insert "-l" yes   (getFlags cmd xs)
+      "-v":xs      -> M.insert "-v" yes   (getFlags cmd xs)
+      _            -> error $ usage(cmd)
     POM2GC -> case args of
       []        -> defaultFlags(cmd)
       "-d":y:xs -> M.insert "-d"  y        (getFlags cmd xs)
@@ -677,6 +702,11 @@ gtarget :: Edge vertex label -> vertex
 gtarget (_, _, v) = v
 
 -- Some utilities
+
+sn states =
+  -- standard renaming of CFSMs' states
+  M.fromList [((S.toList states)!!i, "q" ++ show i)
+             | i <- range (S.size states)]
 
 grenameVertex :: Ord vertex => Ord label => Map vertex vertex -> Graph vertex label -> Graph vertex label
 grenameVertex sigma (nodes, n0, labels, trans) = (nodes', n0', labels, trans')

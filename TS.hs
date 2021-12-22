@@ -43,7 +43,8 @@ emptyBuffer ptps = M.fromList [((s,r),[]) | (_,s) <- M.assocs ptps, (_,r) <- M.a
 --   PRE:  t is a configuration enabled at c
 --   POST: the event corresponding to t from c
 toKEvent :: Configuration -> P -> LTrans -> KEvent
-toKEvent (n, _) ptps (_, ((s,r), d, msg), _) = (n!!(findId s l), n!!(findId r l), s, r, d, msg)
+toKEvent (n, _) ptps (_, ((s,r), d, msg), _) =
+  (n!!(getId s l), n!!(getId r l), s, r, d, msg)
   where l = M.assocs ptps
 
 evt2interaction :: KEvent -> Interaction
@@ -142,7 +143,7 @@ firstActions ts n0 p goal = visit [n0] S.empty S.empty
 possibleActions :: System -> Ptp -> Configuration -> Set Action
 possibleActions (sys,ptps) p n = S.map (\(_,y,_) -> y) $ CFSM.step (sys!!i) ((fst n)!!i) -- S.map (\(_,y,_) -> y) $ S.filter (\(x,_,_) -> x == ((fst n)!!i)) trans
     where -- (_,_,_,trans) = (sys!!i)
-          i             = findId p (M.assocs ptps)
+          i             = getId p (M.assocs ptps)
 
 
 independent :: KEvent -> KEvent -> Bool
@@ -189,7 +190,7 @@ bowtieRel ptps m es = S.fromList $ (prod $ S.toList es)
 
 checkDiamond :: P -> Map Id Diamond -> Ptp -> (State, Action) -> (State, Action) -> Bool
 checkDiamond ptps mapping sbj t t' = S.member (t,t') thisdia
-  where thisdia = case M.lookup (findId sbj (M.assocs ptps)) mapping of
+  where thisdia = case M.lookup (getId sbj (M.assocs ptps)) mapping of
                    Just d -> d
                    Nothing -> S.empty
 
@@ -217,27 +218,33 @@ enabled :: Int -> Bool -> System -> Configuration -> Map (Id,LTrans) [LTrans]
 enabled k fifo (sys, _) (n, b)
     | k == 0    =  M.fromList $ L.concat pairs
     | otherwise = helper 0 (L.concat $ L.map S.toList l)
-    where rng = range $ L.length n
-          l = L.map (\m -> (S.filter (\(_, (ch, d, msg), _) ->
-                                        (d == Send    && (length $ b!ch) < k && bs) ||
-                                        (d == Receive && (length $ b!ch) > 0 && policy ch msg) ||
-                                        (d == LoopSnd && (length $ b!ch) < k && bs) ||
-                                        (d == LoopRcv && (length $ b!ch) > 0 && policy ch msg) ||
-                                        (d == Tau) || (d == BreakLoop)
-                                     ) (mstep m)
-                           )
-                    ) rng
-          mstep m = CFSM.step (sys!!m) (n!!m)
-          match m t = [t' | i <- [m+1 .. (length n-1)],
-                            t' <- (S.toList $ mstep i), dual t t']
-          pairs = L.map (\m -> L.map (\t@(q,(ch,_,msg),q') -> ((m, (q,(ch,Tau,msg),q')), (match m t))) (S.toList $ mstep m)) rng
-          policy ch msg =
-            if fifo
-            then (head $ b!ch) == msg
-            else msg € (b!ch)
-          bs = True -- TODO: to be used to implement 1buffer semantics
-          helper _ [] = M.empty
-          helper m (t:ts) = M.insert (m, t) [] (helper (m+1) ts)
+    where
+      rng = range $ L.length n
+      l = L.map (\m -> (S.filter (\(_, (ch, d, msg), _) ->
+                                    (d == Send    && (length $ b!ch) < k && bs) ||
+                                    (d == Receive && (length $ b!ch) > 0 && policy ch msg) ||
+                                    (d == LoopSnd && (length $ b!ch) < k && bs) ||
+                                    (d == LoopRcv && (length $ b!ch) > 0 && policy ch msg) ||
+                                    (d == Tau) || (d == BreakLoop)
+                                 ) (mstep m)
+                       )
+                )
+          rng
+      mstep m = CFSM.step (sys!!m) (n!!m)
+      match m t = [t' | i <- [m+1 .. (length n-1)],
+                        t' <- (S.toList $ mstep i),
+                        dual t t'
+                      ]
+      pairs =
+        L.map (\m -> L.map (\t@(q,(ch,_,msg),q') -> ((m, (q,(ch,Tau,msg),q')), (match m t))) (S.toList $ mstep m)) rng
+      policy ch msg =
+        if fifo
+        then (head $ b!ch) == msg
+        else msg € (b!ch)
+      bs = True -- TODO: to be used to implement 1buffer semantics
+      helper :: Id -> [LTrans] -> Map (Id,LTrans) [LTrans]
+      helper _ [] = M.empty
+      helper m (t:ts) = M.insert (m, t) [] (helper (m+1) ts)
 
 
 apply :: Bool -> P -> Configuration -> LTrans -> (KEvent, Configuration)
@@ -246,10 +253,10 @@ apply :: Bool -> P -> Configuration -> LTrans -> (KEvent, Configuration)
 --  POST: conf' is the update of conf after applying the transtion
 --        according to the policy established by fifo
 apply fifo ptps c@(n, b) t@(_, (ch@(s,r), d, msg), q)
-    | d == Send      = (toKEvent c ptps t, (Misc.update (findId s (M.assocs ptps)) q n, M.insert ch ((b!ch)++[msg]) b))
-    | d == Receive   = (toKEvent c ptps t, (Misc.update (findId r (M.assocs ptps)) q n, M.insert ch newBuffer b))
-    | d == Tau       = (toKEvent c ptps t, (Misc.update (findId r (M.assocs ptps)) q n, b))
-    | d == BreakLoop = (toKEvent c ptps t, (Misc.update (findId r (M.assocs ptps)) q n, b))
+    | d == Send      = (toKEvent c ptps t, (Misc.update (getId s (M.assocs ptps)) q n, M.insert ch ((b!ch)++[msg]) b))
+    | d == Receive   = (toKEvent c ptps t, (Misc.update (getId r (M.assocs ptps)) q n, M.insert ch newBuffer b))
+    | d == Tau       = (toKEvent c ptps t, (Misc.update (getId r (M.assocs ptps)) q n, b))
+    | d == BreakLoop = (toKEvent c ptps t, (Misc.update (getId r (M.assocs ptps)) q n, b))
     | otherwise      = error ((showDir d (M.empty)) ++ " not allowed")
     where newBuffer =
             if fifo
@@ -267,13 +274,21 @@ step k fifo sys@(_, ptps) conf@(n,_)
     | k > 0     = S.map (\(_,t) -> apply fifo ptps conf t) (M.keysSet ets)
     | otherwise = S.fold S.union S.empty (S.map f (M.keysSet ets))
     where ets = enabled k fifo sys conf
-    --hsl
-          f   = \(m,t@(_, ((s, r), _, _), q)) -> let sidx = findId s (M.assocs ptps)
-                                                     ridx = findId r (M.assocs ptps)
-                                                 in if m==sidx
-                                                    then S.fromList [(toKEvent conf ptps t, (Misc.update ridx q' (Misc.update sidx q  n), emptyBuffer ptps)) | (_, _, q') <- (ets!(m,t))]
-                                                    else S.fromList [(toKEvent conf ptps t, (Misc.update ridx q  (Misc.update sidx q' n), emptyBuffer ptps)) | (_, _, q') <- (ets!(m,t))]
+          f =
+            \(m,t@(_, ((s, r), _, _), q)) ->
+              let
+                sidx = getId s (M.assocs ptps)
+                ridx = getId r (M.assocs ptps)
+                es = toKEvent conf ptps t
+              in
+                S.fromList (
+                  if m==sidx
+                  then
+                    [(es, (Misc.update ridx q' (Misc.update sidx q  n), emptyBuffer ptps)) | (_, _, q') <- (ets!(m,t))]
+                  else
+                    [(es, (Misc.update ridx q  (Misc.update sidx q' n), emptyBuffer ptps)) | (_, _, q') <- (ets!(m,t))]
 
+                  )
 
 generate :: Int -> Bool -> System -> [Configuration] -> Set Configuration -> (Set Configuration, Set KEvent, Set KTrans) -> (Set Configuration, Set KEvent, Set KTrans)
 generate k fifo sys c visited pre@(cset, eset, tset) =
@@ -282,10 +297,13 @@ generate k fifo sys c visited pre@(cset, eset, tset) =
    conf:cs -> if S.member conf visited
               then generate k fifo sys cs visited pre
               else generate k fifo sys ((snd nc) ++ cs) (S.insert conf visited) pre'
-     where nt               = S.map (\(x,y) -> (conf, x, y)) (TS.step k fifo sys conf)
-           nc               = pol $ S.toList nt
-           pre'             = (S.insert conf cset, S.union (S.fromList (fst nc)) eset, S.union nt tset)
-           pol []           = ([],[])
+     where nt = S.map (\(x,y) -> (conf, x, y)) (TS.step k fifo sys conf)
+           nc = pol $ S.toList nt
+           pre' = (S.insert conf cset,
+                   S.union (S.fromList (fst nc)) eset,
+                   S.union nt tset
+                  )
+           pol [] = ([],[])
            pol ((_,f,s):ls) = (f:(fst ll), s:(snd ll)) where ll = pol ls
 
 
@@ -365,13 +383,16 @@ showConf (n,b) sepn sepb display = (nodelabel n sepn) ++ (if sb == "" then "" el
 -- Colors the nodes of ts in TS if they satisfy a property prop in Node -> Bool
 colorConf :: Int -> TSb -> (Configuration -> (Bool,String)) -> Configuration -> (Flag -> (String, String)) -> Flag -> String
 colorConf _ (_,_,_,_) prop c colours f
-    | cond      = ", color=" ++
-                  (fst $ colours f) ++
-                  ", style=filled, fillcolor=" ++
-                  (snd $ colours f) ++
-                  ", penwidth=2.0, fontcolor=blue, xlabel=\"" ++
-                  comment ++ "\""
-    | otherwise = ""
+    | cond =
+      ", color="
+      ++ (fst $ colours f)
+      ++ ", style=filled, fillcolor="
+      ++ (snd $ colours f)
+      ++ ", penwidth=2.0, fontcolor=blue, xlabel=\""
+      ++ comment
+      ++ "\""
+    | otherwise =
+      ""
   where (cond,comment) = prop c
 
 -- matchConfig c cpattern
@@ -404,8 +425,13 @@ flagDeadlock :: Int -> Bool -> System -> TSb -> Configuration -> Bool
 --   POST: returns a function mapping each configuration c
 --         to true iff c has no outgoing transitions according
 --         to the policy established by the flag fifo
-flagDeadlock k fifo sys _ = \c -> ((TS.step k fifo sys c) == S.empty && (not (L.all (\i -> S.empty == (CFSM.step (ms!!i) ((fst c)!!i))) (range $ length ms))))
-    where ms = fst sys
+flagDeadlock k fifo sys _ =
+  \c -> (
+    (TS.step k fifo sys c) == S.empty && (not (L.all (aux c) (range $ length ms)))
+    )
+    where
+      ms = fst sys
+      aux c = \i -> S.empty == (CFSM.step (ms!!i) ((fst c)!!i))
 
 flagAction :: TSb -> String -> KTrans -> Bool
 flagAction _ pattern =
@@ -423,17 +449,9 @@ flagAction _ pattern =
            else (w!!0 == "*" || (show s) == w!!0) && (w!!1 == "*" || (show r) == w!!1) && (w!!2 == "*" || d' == w!!2) && (w!!3 == "*" || w!!3 == msg)
 
 
-ts2file :: FilePath -> String -> Int -> Bool -> System -> TSb -> (Map String String) -> [Cause Configuration KEvent] -> [Cause State KEvent] -> IO()
--- PRE:  .dot.cfg must be a file of lines of at least 2 words; only the first two words are considered
-ts2file destfile sourcefile k fifo sys ts@(confs, q0, _, trans) flags repbra _ = do
---  conf <- readFile $ getDotConf
-  flines <- getDotConf
-  ---setDOT conf ---M.fromList $ L.concat $ L.map (\l -> L.map (\p -> (T.unpack $ p!!0, T.unpack $ p!!1)) [T.words l]) (T.lines $ T.pack conf)
-  -- let qsep       = flines!qsep
-  -- let bsep       = flines!bsep
-  -- let statesep   = flines!statesep
-  -- let confsep    = flines!confsep
-  let --colours :: Flag -> (String, String) where the 1st string is the fg col and 2nd string is the bg 
+ts2String :: (Map String DotString) -> String -> String -> Int -> Bool -> System -> TSb -> (Map String String) -> [Cause Configuration KEvent] -> String
+ts2String flines dest source k fifo sys ts@(confs, q0, _, trans) flags repbra =
+  let
     colours desc
       | desc == Deadlock = ( flines!deadlockcol1, flines!deadlockcol2 )
       | desc == Action   = ( flines!actioncol, "" )
@@ -441,40 +459,84 @@ ts2file destfile sourcefile k fifo sys ts@(confs, q0, _, trans) flags repbra _ =
       | desc == Path     = ( flines!pathcol, "" )
       | desc == Prop     = ( flines!propfgcol, flines!propbgcol )
       | otherwise        = ( "black", "white" )
-  let diaincipit = "digraph ICTS {\ngraph [bgcolor=\"transparent\", bb=10];\n"
-  let startnode  = "\"__start\" [shape = \"none\"; label=\"\";]\n{rank = same \"__start\" \"" ++ (showConf q0 (flines!qsep) (flines!bsep) showQueue) ++ "\"}\n"
-  let startarrow = " [arrowhead=" ++ flines!initshape ++ "; label=\"\"; penwidth=" ++ flines!initwidth ++ "; color=" ++ flines!initcol ++ "]\n"
-  let incoming   = gincoming ts
-  let cpattern   = flags!"-cp"
-  let tpattern   = flags!"-tp"
-  let ppattern   = flags!"-p"
-  let paths      = if ppattern == ""
-                   then M.empty
-                   else getpaths (S.toList $ (S.filter (matchConfig k (flags ! "-p")) confs))
-        where getpaths []     = M.empty
-              getpaths (c:cs) = gpath' ts incoming (getpaths cs) q0 [c] []
-  let legend = if (M.notMember "-l" flags)
-               then "subgraph legend {\n\t#rank = sink;\n\tLegend [shape=rectangle, penwidth=0, fontsize=10, fillcolor=gray94, style=filled, fontcolor=coral, margin=0.1,\n\t\tlabel="
-                    ++    "\"Source file             : " ++ (sourcefile)
-                    ++ "\t\\lDestination file        : " ++ (destfile ++ "_ts" ++ (show k) ++ ".dot")
-                    ++ "\t\\lConfiguration pattern   : " ++ (rmChar '\"' $ show cpattern)
-                    ++ "\t\\lAction pattern          : " ++ (rmChar '\"' $ show tpattern)
-                    ++ "\t\\lPath                    : " ++ (rmChar '\"' $ show ppattern)
-                    ++ "\t\\lNumber of configurations: " ++ (show $ (S.size $ confs))
-                    ++ "\t\\lNumber of transitions   : " ++ (show $ (S.size $ trans))
-                    ++ "\\l\"];\n}"
-               else ""
-  let dianodes = startnode ++
-                 (S.fold (++) "\n" (S.map (\x@(n,_) ->
-                                            "\t\"" ++ (showConf x (flines!qsep) (flines!bsep) showQueue) ++ "\"\t\t\t[label=\"" ++
-                                            (showConf x (flines!statesep) (flines!confsep) displayQueue) ++ "\"" ++
-                                            (colorConf k ts (\y -> ((flagDeadlock k fifo sys ts y),"")) x colours Deadlock) ++
-                                            (if cpattern == "" then "" else (colorConf k ts (\y -> ((matchConfig k cpattern y),"")) x colours Config)) ++
-                                            (L.concat $ L.map (\(_,c) -> colorConf k ts (\y -> (y==x,c)) x colours Prop) [(n',comment) | Rp n' _ _ comment <- repbra, n == (fst n')]) ++
-                                            "];\n")
-                                    confs)) ++
-                 "}{\n"
-  let diatrans =  "\"__start\" -> \"" ++ (showConf q0 (flines!qsep) (flines!bsep) showQueue) ++ "\"" ++ startarrow ++ (S.fold (++) "\n" $ S.map (\tr@(s,e,t) -> "\t\"" ++ (showConf s (flines!qsep) (flines!bsep) showQueue) ++ "\" -> \"" ++ (showConf t (flines!qsep) (flines!bsep) showQueue) ++ "\"\t\t\t[label=\"" ++ (eventLabel k e flines) ++ "\"" ++ (colorTrans ts flags paths tr colours) ++ "];\n") trans)
-  let dest = destfile ++ "_ts" ++ (show k) ++".dot"
-  writeToFile dest (diaincipit ++ legend ++ "\n\nsubgraph ts{\n" ++ dianodes ++ diatrans ++ "}}\n")
+    startnode  =
+      "\"__start\" [shape = \"none\"; label=\"\";]\n{rank = same \"__start\" \""
+      ++ (showConf q0 (flines!qsep) (flines!bsep) showQueue)
+      ++ "\"}\n"
+    startarrow =
+      " [arrowhead="
+      ++ flines!initshape
+      ++ "; label=\"\"; penwidth="
+      ++ flines!initwidth
+      ++ "; color="
+      ++ flines!initcol
+      ++ "]\n"
+    incoming   = gincoming ts
+    cpattern   = flags!"-cp"
+    tpattern   = flags!"-tp"
+    ppattern   = flags!"-p"
+    paths      = 
+      if ppattern == ""
+      then M.empty
+      else getpaths (S.toList $ (S.filter (matchConfig k ppattern) confs))
+      where getpaths []     = M.empty
+            getpaths (c:cs) = gpath' ts incoming (getpaths cs) q0 [c] []
+    diaincipit = "digraph ICTS {\ngraph [bgcolor=\"transparent\", bb=10];\n"
+    legend =
+      if (M.member "-l" flags)
+      then "subgraph legend {\n\t#rank = sink;\n\tLegend [shape=rectangle, penwidth=0, fontsize=10, fillcolor=gray94, style=filled, fontcolor=coral, margin=0.1,\n\t\tlabel="
+        ++    "\"Source file: " ++ (source)
+        ++ (if dest == "" then "" else "\t\\lDestination file: " ++ (dest ++ "_ts" ++ (show k) ++ ".dot"))
+        ++ "\t\\lConfiguration pattern: " ++ (rmChar '\"' $ show cpattern)
+        ++ "\t\\lAction pattern: " ++ (rmChar '\"' $ show tpattern)
+        ++ "\t\\lPath: " ++ (rmChar '\"' $ show ppattern)
+        ++ "\t\\lNumber of configurations: " ++ (show $ (S.size $ confs))
+        ++ "\t\\lNumber of transitions: " ++ (show $ (S.size $ trans))
+        ++ "\\l\"];\n}"
+      else ""
+    dianodes =
+      startnode
+      ++ (S.fold (++) "\n" (
+          S.map (\x@(n,_) ->
+                   "\t\"" ++ (showConf x (flines!qsep) (flines!bsep) showQueue)
+                   ++ "\"\t\t\t[label=\""
+                   ++ (showConf x (flines!statesep) (flines!confsep) displayQueue) ++ "\""
+                   ++ (colorConf k ts (\y -> ((flagDeadlock k fifo sys ts y),"")) x colours Deadlock)
+                   ++ (if cpattern == ""
+                       then ""
+                       else (colorConf k ts (\y -> ((matchConfig k cpattern y),"")) x colours Config)
+                      )
+                   ++ (L.concat $ L.map (\(_,c) -> colorConf k ts (\y -> (y==x,c)) x colours Prop) [(n',comment) | Rp n' _ _ comment <- repbra, n == (fst n')])
+                   ++ "];\n"
+                )
+            confs
+          )
+      )
+      ++ "}{\n"
+    diatrans =
+      "\"__start\" -> \""
+      ++ (showConf q0 (flines!qsep) (flines!bsep) showQueue)
+      ++ "\"" ++ startarrow
+      ++ (S.fold (++) "\n" $ S.map (\tr@(s,e,t) ->
+                                      "\t\"" ++ (showConf s (flines!qsep) (flines!bsep) showQueue)
+                                      ++ "\" -> \""
+                                      ++ (showConf t (flines!qsep) (flines!bsep) showQueue)
+                                      ++ "\"\t\t\t[label=\""
+                                      ++ (eventLabel k e flines) ++ "\""
+                                      ++ (colorTrans ts flags paths tr colours)
+                                      ++ "];\n") trans
+         )
+    output = diaincipit ++ legend ++ "\n\nsubgraph ts{\n" ++ dianodes ++ diatrans ++ "}}\n"
+  in
+    output
 
+
+ts2file :: FilePath -> String -> Int -> Bool -> System -> TSb -> (Map String String) -> [Cause Configuration KEvent] -> [Cause State KEvent] -> IO()
+-- PRE:  dot.cfg must be a file of lines of at least 2 words; only the first two words are considered
+ts2file destfile sourcefile k fifo sys ts flags repbra _ = do
+  flinesIO <- getDotConf
+  let
+    flines = M.fromList [(key, flines!key) | key <- M.keys flines]
+  let dest = destfile ++ "_ts" ++ (show k) ++ ".dot"
+  writeToFile dest $ ts2String flines dest sourcefile k fifo sys ts flags repbra
+  

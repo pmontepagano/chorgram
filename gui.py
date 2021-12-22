@@ -49,23 +49,16 @@ CHORGML = os.sep + "choreography.graphml"
 CC2DIR = os.sep + "cc2"
 CC3DIR = os.sep + "cc3"
 CFG = "chorgram.cfg"
-GCPROJ = "gcproj"
-GCDET = "gcdet"
-GCINT = "gcint"
 POMSEM = "semantics-pom"
 SEM = "semantics"
 ROOT = "root"
 GCGRAPH = "choreography-graph"
-CC2POM = "cc2-closure-pom"
-CC3POM = "cc3-closure-pom"
-CC2CEPOM = "cc2-counterexamples-pom"
-CC2CEGC = "cc2-counterexamples-gc"
-CC2CEDIFF = "cc2-counterexamples-diff"
-CC3CEPOM = "cc3-counterexamples-pom"
-CC3CEGC = "cc3-counterexamples-gc"
-CC3CEDIFF = "cc3-counterexamples-diff"
+CC2POM, CC3POM = ("cc2-closure-pom", "cc3-closure-pom")
+CC2CEPOM, CC3CEPOM = ("cc2-counterexamples-pom", "cc3-counterexamples-pom")
+CC2CEGC, CC3CEGC = ("cc2-counterexamples-gc", "cc3-counterexamples-gc")
+CC2CEDIFF, CC3CEDIFF = ("cc2-counterexamples-diff", "cc3-counterexamples-diff")
+POMPROJ, GCPROJ, GCDET, GCINT = ("pomsetproj", "gcproj", "gcdet", "gcint")
 TERMCE = "termination-counterexamples"
-POMPROJ = "pomsetproj"
 
 def add_menu_entries(action_group, entries):
     for e in entries:
@@ -78,6 +71,7 @@ def delete_folder(folder):
         shutil.rmtree(folder)
     except:
         pass
+
 def list_files_in_folder(folder):
     # invoked only once 
     files = [f for f in listdir(folder) if isfile(join(folder, f))]
@@ -88,6 +82,7 @@ def get_fmt_path(folder, subdir, suf, idx):
         return join(folder, subdir, "%d.%s"%(idx,suf))
     else:
         return join(folder, subdir, "%d"%idx)
+
 
 ##
 #    GUI classes
@@ -181,7 +176,7 @@ class Workspace():
         delete_folder(folder)
         os.makedirs(join(folder, "closure"))
         os.makedirs(join(folder, "synthesis"))
-        
+        #
         pomsets = [self.semantics[f] for f in self.semantics]
         cc2c = cc2closure(pomsets)
         self.cc2 = {"closure": {}, "mapping": {}}
@@ -301,14 +296,14 @@ class Workspace():
         delete_folder(folder)
         os.makedirs(join(folder, "closure"))
         os.makedirs(join(folder, "synthesis"))
-        
+        #
         pomsets = [self.semantics[f] for f in self.semantics]
         self.cc3 = {"closure": {}, "mapping": {}}
-
+        #
         (cc3c, prefixes) = cc3closure(pomsets)
         cc3c = self.filter_cc3_closure(cc3c)
         cc3res = cc3pom(cc3c, prefixes)
-
+        #
         #TODO: remove duplicates after 
         i = 0
         for pm in cc3c:
@@ -409,7 +404,7 @@ class Workspace():
             export_projection(folder, pr, self.pomsetproj[pr])
             nx.readwrite.graphml.write_graphml(self.pomsetproj[pr], join(folder, "%s.graphml"%pr))
 
-
+            
 class MainWindow(Gtk.Window):
 
     def __init__(self):
@@ -545,7 +540,7 @@ class MainWindow(Gtk.Window):
             stock_id = None
         )
         action_group.add_action(action_generatemenu)
-
+        #
         action_projmenu = Gtk.Action(
             name = "ProjectionMenu",
             label = "Projections",
@@ -680,7 +675,7 @@ class MainWindow(Gtk.Window):
         cc_list = self.store.append(None, ["cc%d"%closure, None, "CC %d"%closure])
         closure_list = self.store.append(cc_list, ["cc%d-closure"%closure, None, "closure"])
         counterexamples_list = self.store.append(cc_list, ["cc%d-counterexamples"%closure, None, "counterexamples"])
-
+        #
         for pm in res["closure"]:
             str_view = "pomset %d"%pm
             if pm in res["mapping"]:
@@ -733,7 +728,7 @@ class MainWindow(Gtk.Window):
             ccprefix = "cc3"
         if ccprefix is None:
             return
-         
+        #
         pom = self.tree_mapping[key]
         if ccprefix == "cc2":
             res = self.workspace.gen_cc2_choreography(pom)
@@ -755,7 +750,7 @@ class MainWindow(Gtk.Window):
         if treeiter is None:
             return
         key = (model[treeiter][0], model[treeiter][1])
-
+        #
         ccprefix = None
         if key[0] == CC2CEGC:
             ccprefix = "cc2"
@@ -763,10 +758,10 @@ class MainWindow(Gtk.Window):
             ccprefix = "cc3"
         if ccprefix is None:
             return
-
+        #
         if not key in self.tree_mapping:
             return
-
+        #
         win = CostWindow(self)
         win.show()
 
@@ -775,7 +770,7 @@ class MainWindow(Gtk.Window):
         if treeiter is None:
             return
         key = (model[treeiter][0], model[treeiter][1])
-
+        #
         ccprefix = None
         if key[0] == CC2CEGC:
             ccprefix = "cc2"
@@ -783,17 +778,17 @@ class MainWindow(Gtk.Window):
             ccprefix = "cc3"
         if ccprefix is None:
             return
-
+        #
         if not key in self.tree_mapping:
             return
-
+        #
         pom = self.tree_mapping[key]
-
+        #
         if ccprefix == "cc2":
             diffs = self.workspace.gen_cc2_diff(pom, costs)
         else:
             diffs = self.workspace.gen_cc3_diff(pom, costs)
-
+        #
         diff_iter = self.store.append(treeiter, ["%s-counterexamples-diff-list"%ccprefix, None, "diffs"])
         for i in diffs:
             new_iter = self.store.append(diff_iter, ["%s-counterexamples-diff"%ccprefix, "%d-%d"%(pom, i), "%d: %f"%(i, diffs[i])])
@@ -859,7 +854,6 @@ class MainWindow(Gtk.Window):
                 self.workspace.workingDir + CHORPNG
             )
         )
-
 
     def show_pomset_graph(self, f):
         self.change_main_view(
@@ -941,12 +935,11 @@ class MainWindow(Gtk.Window):
         filter_gc.set_name("gc files")
         filter_gc.add_pattern("*.gc")
         dialog.add_filter(filter_gc)
-
+        #
         filter_any = Gtk.FileFilter()
         filter_any.set_name("Any files")
         filter_any.add_pattern("*")
         dialog.add_filter(filter_any)
-
 
     def on_menu_file_quit(self, widget):
         Gtk.main_quit()
@@ -1015,22 +1008,22 @@ class CostWindow(Gtk.Window):
             self.mapval[k]["label"] = Gtk.Label(self.mapval[k]["txt"])
             self.mapval[k]["entry"] = Gtk.Entry()
             self.mapval[k]["entry"].set_text("%.2f" % self.mapval[k]["value"])
-
+        #
         def attach_elem(name, x, y):
             table.attach(self.mapval[name]["label"], 2*x, 2*x+1, y, y+1)
             table.attach(self.mapval[name]["entry"], 2*x+1, 2*x+2, y, y+1)
-
+        #
         for k in self.mapval:
             attach_elem(k, self.mapval[k]["pos"][0], self.mapval[k]["pos"][1])
-
+        #
         button = Gtk.Button.new_with_mnemonic("_Close")
         button.connect("clicked", self.on_close_clicked)
         table.attach(button, 0, 1, 5, 6)
-
+        #
         button = Gtk.Button.new_with_mnemonic("_Execute")
         button.connect("clicked", self.on_execute_clicked)
         table.attach(button, 1, 2, 5, 6)
-
+        #
         self.add(table)
         self.show_all()
 
@@ -1046,6 +1039,7 @@ class CostWindow(Gtk.Window):
 
     def on_close_clicked(self, widget) :
         self.close()
+
     def on_execute_clicked(self, widget) :
         res = {}
         for k in self.mapval:
