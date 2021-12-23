@@ -59,30 +59,6 @@ all:
 	$(MAKE) ptps_hs
 	$(MAKE) gents_hs
 
-showconfig:
-	clear
-	@echo cfgdir=$(cfgdir)
-	@echo hkcpath=$(hkcpath)
-	@echo petripath=$(petripath)
-	@echo experimentsdir=$(experimentsdir)
-	@echo logfile=$(logfile)
-
-hp:
-	@if test -e $(hkcpath)/hkc; then echo ">>> The binary of hkc is already there. Nothing to be done."; else make -C $(hkcpath); echo ">>> hkc compiled"; fi
-	@if test -e $(hkcpath)/hkc$(os); then echo ">>> The link to hkc is already there. Nothing to be done."; else (cd $(hkcpath); ln -s hkc hkc$(os)) ; echo ">>> link to petrify added"; fi
-	@if test -e $(petripath)/petrify$(os); then echo ">>> The link to petrify is already there. Nothing to be done."; else (cd $(petripath); ln -s petrify petrify$(os)); fi
-
-
-git:
-	git pull
-	git commit -am $(gitmsg) && git push
-
-clean:
-	@rm -f *~ *.o *.hi SystemParser.* GCParser.* KGparser.* gmc gc BuildGlobal sysparser $(cfgfile) *.info *.log
-	@rm -f BuildGlobal cfsm2gc chorgram gc2dot gc2fsa gc2gml gc2pom gmc pom2gc project ptps sysparser wb wf ws
-	@find . -name "*~" -exec rm -rf {} \;
-	$(info >>> cleaning done.)
-
 gmc_hs: gmc.hs SystemParser.hs FSA.hs CFSM.hs TS.hs Representability.hs Misc.hs DotStuff.hs BranchingProperty.hs PetrifyBridge.hs
 	$(ccmd) $<
 
@@ -133,3 +109,27 @@ ptps_hs: ptps.hs GCParser.hs Misc.hs
 
 gents_hs: gents.hs GCParser.hs Misc.hs
 	$(ccmd) $<
+
+showconfig:
+	clear
+	@echo cfgdir=$(cfgdir)
+	@echo hkcpath=$(hkcpath)
+	@echo petripath=$(petripath)
+	@echo experimentsdir=$(experimentsdir)
+	@echo logfile=$(logfile)
+
+hp:
+	@if test -e $(hkcpath)/hkc; then echo ">>> The binary of hkc is already there. Nothing to be done."; else make -C $(hkcpath); echo ">>> hkc compiled"; fi
+	@if test -e $(hkcpath)/hkc$(os); then echo ">>> The link to hkc is already there. Nothing to be done."; else (cd $(hkcpath); ln -s hkc hkc$(os)) ; echo ">>> link to petrify added"; fi
+	@if test -e $(petripath)/petrify$(os); then echo ">>> The link to petrify is already there. Nothing to be done."; else (cd $(petripath); ln -s petrify petrify$(os)); fi
+
+
+git:
+	git pull
+	git commit -am $(gitmsg) && git push
+
+clean:
+	@rm -f *~ *.o *.hi SystemParser.* GCParser.* KGparser.* gmc gc BuildGlobal sysparser $(cfgfile) *.info *.log
+	@rm -f BuildGlobal cfsm2gc chorgram gc2dot gc2fsa gc2gml gc2pom gmc pom2gc project ptps sysparser wb wf ws
+	@find . -name "*~" -exec rm -rf {} \;
+	$(info >>> cleaning done.)

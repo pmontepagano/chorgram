@@ -7,7 +7,7 @@
 #
 # Besides adding call-backs for some ChorGram features, the following
 # changes wrt cc/gui.py have been made:
-#   - the menu structure is now in cc/ui_info.xml
+#   - the menu structure is now in aux/ui_info.xml
 #   - several 'get_*_folder' functions removed
 #   - several class methods have been turned into functions
 #   - 'print' commands removed
@@ -37,20 +37,23 @@ from cc.projection import proj_to_cfsm, export_projection
 ##
 #   Loading the menu structure
 ##
-with open(join("cc", "ui_info.xml")) as f:
+with open(join("aux", "ui_info.xml")) as f:
     UI_INFO = ''.join(f.readlines())
     f.close()
 
 ##
 #    Some "constants" and utility functions
 ##
+BUFSIZE = 2
 CHORPNG = os.sep + "choreography.png"
 CHORGML = os.sep + "choreography.graphml"
 CC2DIR = os.sep + "cc2"
 CC3DIR = os.sep + "cc3"
 CFG = "chorgram.cfg"
 POMSEM = "semantics-pom"
-SEM = "semantics"
+POM = "pomsets"
+LTSSEM = "transition system"
+LTS = "transition system"
 ROOT = "root"
 GCGRAPH = "choreography-graph"
 CC2POM, CC3POM = ("cc2-closure-pom", "cc3-closure-pom")
@@ -95,7 +98,8 @@ class Workspace():
         self.root_folder = os.path.dirname(gc_path)
         self.workingDir = self.gc_absolute_path.split(".")[0]
         self.ptps = None
-        self.semantics = None
+        self.pomsemantics = None
+        self.lts = None
         self.cc2 = None
         self.cc3 = None
         self.termination = None
@@ -128,7 +132,7 @@ class Workspace():
             )
         )
 
-    def gen_semantics(self):
+    def pom_semantics(self):
         # TODO: ensure this goes in the third position
         # TODO: remove all the past semantics from the tree
         folder = join(self.workingDir, "pomsets")
@@ -139,11 +143,20 @@ class Workspace():
             self.gc_absolute_path
         )
         os.system(cmd)
-        self.semantics = {}
+        self.pomsemantics = {}
         for f in list_files_in_folder(folder):
             graph = nx.readwrite.graphml.read_graphml(join(folder, f))
-            self.semantics[f] = graph
+            self.pomsemantics[f] = graph
             cc.utils.debug_pomset(cc.pomset.transitive_reduction(graph), join(folder, f))
+
+    def lts_semantics(self):
+        fsa = join(self.workingDir, "system.fsa")
+        dot = join(self.workingDir, "ts%d.dot"%BUFSIZE)
+        png = join(self.workingDir, "ts%d.png"%BUFSIZE)
+        gc2fsa = "gc2fsa %s > %s; "%(self.gc_absolute_path, fsa)
+        cmd = gc2fsa + "gents -b %d %s > %s; dot -Tpng -o %s %s" % (BUFSIZE, fsa, dot, png, dot)
+        os.system(cmd)
+        self.lts = png
 
     def check_wf(self, condition):
         assert condition in ["ws", "wb", "wf"]
@@ -170,14 +183,14 @@ class Workspace():
         os.system("rm -f %s" % (dest))
 
     def gen_cc2(self):
-        if self.semantics is None:
+        if self.pomsemantics is None:
             return
         folder = self.workingDir + CC2DIR
         delete_folder(folder)
         os.makedirs(join(folder, "closure"))
         os.makedirs(join(folder, "synthesis"))
         #
-        pomsets = [self.semantics[f] for f in self.semantics]
+        pomsets = [self.pomsemantics[f] for f in self.pomsemantics]
         cc2c = cc2closure(pomsets)
         self.cc2 = {"closure": {}, "mapping": {}}
         cc2res = cc2pom(cc2c, pomsets)
@@ -290,14 +303,14 @@ class Workspace():
         return pom
 
     def gen_cc3(self):
-        if self.semantics is None:
+        if self.pomsemantics is None:
             return
         folder = self.workingDir + CC3DIR
         delete_folder(folder)
         os.makedirs(join(folder, "closure"))
         os.makedirs(join(folder, "synthesis"))
         #
-        pomsets = [self.semantics[f] for f in self.semantics]
+        pomsets = [self.pomsemantics[f] for f in self.pomsemantics]
         self.cc3 = {"closure": {}, "mapping": {}}
         #
         (cc3c, prefixes) = cc3closure(pomsets)
@@ -361,11 +374,11 @@ class Workspace():
         return join(self.workingDir, "termination")
 
     def check_termination(self):
-        if self.semantics is None:
+        if self.pomsemantics is None:
             return
         delete_folder(self.get_termination_folder())
         os.makedirs(join(self.get_termination_folder()))        
-        pomsets = [self.semantics[f] for f in self.semantics]
+        pomsets = [self.pomsemantics[f] for f in self.pomsemantics]
         self.termination = cc.termination.termination_condition(pomsets)
         for p in self.termination:
             for c in self.termination[p]:
@@ -390,9 +403,9 @@ class Workspace():
                 os.system("dot -Tpng -o %s %s"%(path%"png", path%"dot"))
                 self.gcproj[ptype[0]][p] = path%"png"
             return
-        if self.semantics is None:
+        if self.pomsemantics is None:
             return
-        poms = [self.semantics[pomid] for pomid in self.semantics]
+        poms = [self.pomsemantics[pomid] for pomid in self.pomsemantics]
         principals = []
         for pom in poms:
             for pr in cc.pomset.get_all_principals(pom):
@@ -486,6 +499,8 @@ class MainWindow(Gtk.Window):
         val = self.tree_mapping[key]
         if key[0] == POMSEM:
             self.show_pomset_graph(val)
+        if key[0] == LTSSEM:
+            self.show_lts()
         elif key[0] == CC2POM:
             self.show_cc2_closure(val)
         elif key[0] == CC2CEPOM:
@@ -553,7 +568,8 @@ class MainWindow(Gtk.Window):
             ["GCProjection", "Project GC", "Project g-choreography", None, self.on_menu_gcproject, "<Control>m"],
             ["GCDeterminised", "Determinise GC", "Project g-choreography with determinisation", None, self.on_menu_gcdet, "<Control>d"],
             ["GCIntermediate", "Intermediate CFSMs", "Intermediate CFSMs", None, self.on_menu_gcintermediate, "<Control>i"],
-            ["FileGenSemantics", "_Semantics", "Generate Pomset Semantics", None, self.on_menu_gen_semantics, "<Control>s"]
+            ["PomSemantics", "Pomset Semantics", "Generate Pomset Semantics", None, self.on_menu_pom_semantics, "<Control>s"],
+            ["LTS", "Transition system", "Generate Transition System", None, self.on_menu_lts_semantics, "<Control>l"]
         ]
         add_menu_entries(action_group, entries)
         ##
@@ -660,15 +676,23 @@ class MainWindow(Gtk.Window):
                 break
             it = self.store.iter_next(it)
 
-    def on_menu_gen_semantics(self, widget):
-        self.workspace.gen_semantics()
-        self.remove_tree_root_section(SEM)
-        semantics = self.store.append(None, [SEM, None, SEM])
+    def on_menu_pom_semantics(self, widget):
+        self.workspace.pom_semantics()
+        self.remove_tree_root_section(POM)
+        semantics = self.store.append(None, [POM, None, POM])
         i = 0
-        for f in self.workspace.semantics:
+        for f in self.workspace.pomsemantics:
             self.store.append(semantics, [POMSEM, str(i), "pomset %d"%i])
             self.tree_mapping[(POMSEM, str(i))] = f
             i+=1
+
+    def on_menu_lts_semantics(self, widget):
+        self.workspace.lts_semantics()
+        self.remove_tree_root_section(LTS)
+        b = str(BUFSIZE) 
+        semantics = self.store.append(None, [LTS, None, LTS])
+        self.store.append(semantics, [LTSSEM, b, "lts (size %d)"%BUFSIZE])
+        self.tree_mapping[(LTSSEM, b)] = self.workspace.lts
 
     def closure_res_to_tree(self, closure, res):
         self.remove_tree_root_section("cc%d"%closure)
@@ -859,6 +883,13 @@ class MainWindow(Gtk.Window):
         self.change_main_view(
             Gtk.Image.new_from_file(
                 join(self.workspace.workingDir, "pomsets", "%s.png"%f)
+            )
+        )
+
+    def show_lts(self):
+        self.change_main_view(
+            Gtk.Image.new_from_file(
+                join(self.workspace.workingDir, "ts%d.png"%BUFSIZE)
             )
         )
 

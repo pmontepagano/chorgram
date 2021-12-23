@@ -6,7 +6,8 @@
       <menuitem action='FileQuit' />
     </menu>
     <menu action='GenerateMenu'>
-      <menuitem action='FileGenSemantics' />
+      <menuitem action='PomSemantics' />
+      <menuitem action='LTS' />
       <menu action='ProjectionMenu'>
           <menuitem action='PomsetProjection' />
           <menuitem action='GCProjection' />
