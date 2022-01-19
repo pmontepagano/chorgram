@@ -38,7 +38,7 @@ main = do
             getCmd PROJ (L.take (L.length progargs - L.length tmp) progargs)
       gctxt <- readFile sourcefile
       let ( gc, names ) =
-            case gcgrammar gctxt 0 0 of
+            case gcgrammar gctxt (0, 0) (0, 0) of
               Ok x -> x
               Er err -> error err
       let ptps = Data.Set.toList names

@@ -24,7 +24,7 @@ main = do progargs <- getArgs
                     setFileNames sourcefile flags
               createDirectoryIfMissing True dir
               let ( gc, names ) =
-                    case gcgrammar gctxt 0 0 of
+                    case gcgrammar gctxt (0, 0) (0, 0) of
                       Ok x -> x
                       Er err -> error err
               let ptps =

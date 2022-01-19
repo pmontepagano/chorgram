@@ -17,25 +17,30 @@
 --       |  branch P { Brc }
 --       |  G ; G
 --       |  * G @ P
---       |  repeat { G }
---       |  repeat P { G }
+--       |  repeat { G unless guard }
+--       |  repeat P { G unless guard }
 --       |  { G }
 --       |  ( G )                        -- this is deprecated. For backward compatibility only
 --
---    Brc   ::= G | B + B
+--    Brc   ::= G | G unless guard | B + B
+--
+--    guard ::= P % str | P % str, guard
 --
 -- where '(o)' has a special role: it marks a point where the selector
--- of a loop may exit the iteration. The 'sel' construct, which
+-- of a loop may exit the iteration. Guards are used only for the
+-- reversible semantics and the string in them is supposed to be some
+-- valid Erlang code. Likewise for the 'sel' construct, which
 -- generalises the choice for the reversible semantics. Notice that
 -- the 'sel' and the 'branch' constructs have the same semantics and
 -- allow to specify the selector of the branch (to simplify the
 -- realisation of projections on Erlang, the selector is mandatory for
--- REGs and optional otherwise).
+-- REGs and optional otherwise). The clause 'unless guard' is optional
+-- in branching and iteration.
 --
--- The parser for the forward assumes the following equalities
+-- The parser assumes the following equalities
 --
---   sel P { G1 + ... + Gn } = G1 + ... + Gn      for all guards g1, ..., gn 
---   repeat P {G}                       = * G @ P 
+--   sel P { G1 unless g1 + ... + Gn unless gn } = G1 + ... + Gn      for all guards g1, ..., gn 
+--   repeat P {G unless g}                       = * G @ P
 --
 -- The binary operators _ | _, _ + _, and _ ; _ are given in ascending order of
 -- precedence.
@@ -57,22 +62,36 @@
 -- Text enclosed by '[' and ']' is treated as multi-line comment and,
 -- after '..', so is the rest of a line.
 --
--- The parser generator is Haskell's 'Happy' and the parser
--- (GCParser.hs) is obtained by typing 'make parser'.
---
 -- Basic syntactic checks are made during the parsing (e.g, (i) that
 -- sender and receiver of interactions have to be different and (2)
 -- that the participant controlling a loop is active in the
 -- loop). More checks are planned together with improved error
 -- handling.
 --
+-- A rudimentary mechanism of definition of g-choreography constants
+-- is provided by the following syntactic  construnct
+--
+--      let X1 |-> G1 & ... & Xn |-> Gn in G
+--
+-- where X1, ..., Xn are pairwise different and the set of equations
+-- should not yield recursive definitions. To invoke a constant the
+-- productions of G are extended as follows:
+--
+--       G ::= ...
+--          |  do X
+--
+-- The parsers flags uses of g-choreography constants not defined in
+-- G; likewise, for each 1 < i <= n, Gi can use only constants Xj with
+-- j < i.
+--
 
 {
 module GCParser where
 import SyntacticGlobalChoreographies
-import Data.Set as S (empty, singleton, intersection, union, unions, difference, fromList, difference, toList, member, foldr, Set)
+import ErlanGC
+import Data.Set as S (empty, singleton, intersection, null, union, unions, difference, fromList, difference, toList, member, foldr, Set)
 import Data.List as L
-import qualified Data.Map as M (keys, empty, insert, union, elems, map, fromList, Map)
+import qualified Data.Map as M (keys, empty, insert, union, (!), intersection, null, elems, member, map, fromList, Map)
 import Misc
 import CFSM
 }
@@ -88,6 +107,7 @@ import CFSM
   '(o)'         { TokenEmp      }
   '->'	     	{ TokenArr      }
   '=>'	        { TokenMAr      }
+  '|->'	     	{ TokenMap      }
   '|'	        { TokenPar      }
   '+'	        { TokenBra      }
   '%'	        { TokenGrd      }
@@ -100,103 +120,202 @@ import CFSM
   ','	        { TokenCom      }
   '{'	        { TokenCurlyo   }
   '}'	        { TokenCurlyc   }
-  'sel'         { TokenSel      }
-  'branch'      { TokenSel      }
+  '&'	        { TokenAnd      }
+  'sel'         { TokenSel 3    }
+  'branch'      { TokenSel 6    }
   'repeat'      { TokenRep      }
   'unless'      { TokenUnl      }
-  '--hsl--'     { TokenEof      }
+  'let'         { TokenLet      }
+  'in'          { TokenIn       }
+  'do'          { TokenDo       }
 
 %right '|'
 %right '+'
 %right '%'
 %right ';'
 %right ','
+%left '&'
 
 %%
 
 G :: { (GC, Set Ptp) }
-  G : B      { $1 }
-  | B '|' G  { (Par ((checkToken TokenPar $1)
-                     ++ (checkToken TokenPar $3)),
-                 S.union (snd $1) (snd $3))
-             }
+G : GE  { $1 M.empty }
+  
+GE :: { GCEnv -> (GC, Set Ptp) }
+GE : E B
+     { \env ->
+         let
+           join = compEnv env $1
+         in
+           $2 join
+     }
+   | E B '|' GE
+     { \env ->
+         let
+           join = compEnv env $1
+           (g, ptps) = $2 join
+         in
+           (Par ((checkToken TokenPar (g, ptps))
+                 ++ (checkToken TokenPar ($4 join))),
+             S.union ptps (snd ($4 join))
+           )
+     }
 
 
-B :: { (GC, Set Ptp) }
-B : S                               { $1 }
-  | choiceop '{' Br '+' Bs '}'      { (let
-                                          branches = L.map fst ([$3] ++ $5)
-                                          aux g l = l ++ (checkToken TokenBra g)
-                                          tmp = L.foldr aux [] branches
-                                          gcs = M.fromList $ L.zip [0 .. length tmp] tmp
-                                       in
-                                          Bra gcs,
-                                        ptpsBranches ([$3] ++ $5))
-                                    }
-  | choiceop str '{' Br '+' Bs '}'  { (let
-                                          branches = L.map fst ([$4] ++ $6)
-                                          aux g l = l ++ (checkToken TokenBra g)
-                                          tmp = L.foldr aux [] branches
-                                          gcs = M.fromList $ L.zip [0 .. length tmp] tmp
-                                       in
-                                          Bra gcs,
-                                        ptpsBranches ([$4] ++ $6))
-                                    }
+E :: { GCEnv }
+E : 'let' A 'in' { $2 M.empty }
+  | {- empty -}  { M.empty }
+
+                 
+A :: { GCEnv -> GCEnv }
+A : str '|->' B
+  { \env ->
+      let
+        (g, ptps) = $3 env
+      in
+        if (M.member $1 env)
+        then myErr ("Double definition of constant " ++ $1)
+        else M.insert $1 (g, ptps) env
+  }
+  | A '&' str '|->' B
+    { \env ->
+        let
+          old = M.intersection env ($1 M.empty)
+          join = M.union env ($1 M.empty)
+          (g, ptps) = $5 join
+        in
+          case (M.null old, M.member $3 join) of
+            (False, _) -> myErr ("Double definition of constants: " ++ (mkSep (M.keys old) ", "))
+            (_, True)  -> myErr ("Constant " ++ $3 ++ " already defined")
+            _ -> (M.insert $3 (g, ptps) join)
+    }
+
+
+B :: { GCEnv -> (GC, Set Ptp) }
+B : S  { $1 }
+  | choiceop '{' Br '+' Bs '}'
+    { \env ->
+        (let
+            branches = L.map fst ([$3 env] ++ ($5 env))
+            aux g l = l ++ (checkToken TokenBra g)
+            tmp = L.foldr aux [] branches
+            gcs = M.fromList $ L.zip [0 .. length tmp] tmp
+          in
+           Bra gcs,
+          ptpsBranches ([$3 env] ++ ($5 env))
+        )
+    }
+  | choiceop str '{' Br '+' Bs '}'
+    { \env ->
+        (let
+            branches = L.map fst ([$4 env] ++ ($6 env))
+            aux g l = l ++ (checkToken TokenBra g)
+            tmp = L.foldr aux [] branches
+            gcs = M.fromList $ L.zip [0 .. length tmp] tmp
+          in
+           Bra gcs,
+          ptpsBranches ([$4 env] ++ ($6 env))
+        )
+    }
 
 
 choiceop : 'sel'     {}
          | 'branch'  {}
 
 
-Bs :: { [((GC, Set Ptp), M.Map String String)] }
-Bs : Br         { [$1] }
-   | Br '+' Bs  { [$1] ++ $3 }
+Bs :: { GCEnv -> [((GC, Set Ptp), M.Map String String)] }
+Bs : Br         { \env -> [$1 env] }
+   | Br '+' Bs  { \env -> [$1 env] ++ ($3 env) }
 
 
-Br :: { ((GC, Set Ptp), M.Map String String) }
-Br : S                 { ($1, M.empty) }
+Br :: { GCEnv -> ((GC, Set Ptp), M.Map String String) }
+Br : S { \env -> ($1 env, M.empty) }
+   | S 'unless' guard { \env -> checkGuard ($1 env) $3 }
 
 
-S :: { (GC, Set Ptp) }
-S : '(o)'                               { (Emp, S.empty) }
-  | Blk                                 { $1 }
-  | B ';' B                             { (Seq ((checkToken TokenSeq $1)
-                                                 ++ (checkToken TokenSeq $3)),
-                                            S.union (snd $1) (snd $3))
-                                        }
+S :: { GCEnv -> (GC, Set Ptp) }
+S : '(o)'  { \_ -> (Emp, S.empty) }
+  | Blk
+    { $1 }
+  | B ';' B
+    { \env ->
+        let
+          (b1, ptps1) = ($1 env)
+          (b2, ptps2) = ($3 env)
+        in
+          (Seq ((checkToken TokenSeq (b1, ptps1) )
+                ++ (checkToken TokenSeq (b2, ptps2))),
+            S.union ptps1 ptps2
+          )
+    }
+
+    
+Blk :: { GCEnv -> (GC, Set Ptp) }
+Blk : str '->' str ':' str
+  { \_ ->
+      case ((isPtp $1), (isPtp $3), ($1 == $3)) of
+        (True, True, False)  -> ((Act ($1 , $3) $5), S.fromList [$1,$3])
+        (False, False, _)    -> myErr ("Bad names " ++ $1 ++ " and " ++ $3)
+        (False, True, True)  -> myErr ("Bad name " ++ $1 ++ " and sender and receiver must be different")
+        (False, True, False) -> myErr ("Bad name " ++ $1)
+        (True, False, False) -> myErr ("Bad name " ++ $3)
+        (_, _, True)         -> myErr ("Sender " ++ $1 ++ " cannot also be receiver in the same interaction")
+  }
+  | str '=>' ptps ':' str
+    { \_ ->
+        if (L.elem $1 $3)
+        then myErr ($1 ++ " must NOT be one of the receivers " ++ (L.foldl (\x y -> if x == "" then y else x ++ ", " ++ y) "" $3))
+        else case (isPtp $1, $3) of
+          (False, _)   -> myErr ("Bad name " ++ $1)
+          (True, [])   -> myErr ($1 ++ " cannot be empty") -- ($1 ++ " => " ++ "[]")
+          (True, s:[]) -> ((Act ($1 , s) $5), S.fromList([$1,s]))
+          _            -> (Par (L.map (\s -> (Act ($1 , s) $5)) $3),S.fromList($1:$3))
+    }
+  | 'do' str
+    { \env ->
+        if M.member $2 env
+        then env M.! $2
+        else myErr ("Constant " ++ $2 ++ " is undefined")
+    }
+  | '*' GE '@' str
+    { \env ->
+        let
+          (g, ptps) = $2 env
+        in
+          case ((isPtp $4), (S.member $4 ptps)) of
+            (True, True)  -> (Rep g $4 , S.union (S.singleton $4) ptps)
+            (False, _)    -> myErr ("Bad name " ++ $4)
+            (True, False) -> myErr ("Participant " ++ $4 ++ " is not among the loop's participants: " ++ (show $ toList ptps))
+    }
+  | 'repeat' str '{' GE '}'
+    { \env ->
+        let
+          (g, ptps) = $4 env
+        in
+          case ((isPtp $2), (S.member $2 ptps)) of
+            (True, True)  -> (Rep g $2 , S.union (S.singleton $2) ptps)
+            (False, _)    -> myErr ("Bad name " ++ $2)
+            (True, False) -> myErr ("Participant " ++ $2 ++ " is not among the loop's participants: " ++ (show $ toList ptps))
+    }
+  | 'repeat' str '{' GE 'unless' guard '}'
+    { \env ->
+        let
+          (g, ptps) = $4 env
+        in
+          case ((isPtp $2), (S.member $2 ptps)) of
+            (True, True)  -> (Rep g $2 , S.union (S.singleton $2) ptps)
+            (False, _)    -> myErr ("Bad name " ++ $2)
+            (True, False) -> myErr ("Participant " ++ $2 ++ " is not among the loop's participants: " ++ (show $ toList ptps))
+    }
+  | '{' GE '}'
+    { \env -> $2 env }
+  | '(' GE ')'               -- this is for backward compatibility and it is deprecated
+    { \env -> $2 env }
 
 
-Blk :: { (GC, Set Ptp) }
-Blk : str '->' str ':' str              { case ((isPtp $1), (isPtp $3), ($1 == $3)) of
-        				    (True, True, False)   -> ((Act ($1 , $3) $5), S.fromList [$1,$3])
-        				    (False, False, _) -> myErr ("Bad names " ++ $1 ++ " and " ++ $3)
-	        			    (False, True, True)    -> myErr ("Bad name " ++ $1 ++ " and sender and receiver must be different")
-	        			    (False, True, False)    -> myErr ("Bad name " ++ $1)
-	        			    (True, False, False)  -> myErr ("Bad name " ++ $3)
-		        		    (_, _, True)  -> myErr ("Sender " ++ $1 ++ " cannot also be receiver in the same interaction")
-                                        }
-  | str '=>' ptps ':' str               { if (L.elem $1 $3)
-                                          then myErr ($1 ++ " must NOT be one of the receivers " ++ (L.foldl (\x y -> if x == "" then y else x ++ ", " ++ y) "" $3))
-                                          else case (isPtp $1, $3) of
-                                                 (False, _)   -> myErr ("Bad name " ++ $1)
-                                                 (True, [])   -> myErr ($1 ++ " cannot be empty") -- ($1 ++ " => " ++ "[]")
-                                                 (True, s:[]) -> ((Act ($1 , s) $5), S.fromList([$1,s]))
-                                                 _            -> (Par (L.map (\s -> (Act ($1 , s) $5)) $3),S.fromList($1:$3))
-                                        }
-  | '*' G '@' str                       {
-      			        	  case ((isPtp $4), (S.member $4 (snd $2))) of
-                                            (True, True)  -> (Rep (fst $2) $4 , S.union (S.singleton $4) (snd $2))
-                                            (False, _)    -> myErr ("Bad name " ++ $4)
-                                            (True, False) -> myErr ("Participant " ++ $4 ++ " is not among the loop's participants: " ++ (show $ toList $ snd $2))
-                                        }
-  | 'repeat' str '{' G '}'              {
-              				  case ((isPtp $2), (S.member $2 (snd $4))) of
-                                            (True, True)  -> (Rep (fst $4) $2 , S.union (S.singleton $2) (snd $4))
-                                            (False, _)    -> myErr ("Bad name " ++ $2)
-                                            (True, False) -> myErr ("Participant " ++ $2 ++ " is not among the loop's participants: " ++ (show $ toList $ snd $4))
-                                        }
-  | '(' G ')'                           { $2 }    -- this is for backward compatibility and it is deprecated
-  | '{' G '}'                           { $2 }
+guard :: { M.Map String String }
+guard : str '%' str             { M.insert $1 $3 M.empty }
+      | str '%' str ',' guard   { M.insert $1 $3 $5 }
 
 
 ptps :: { [String] }
@@ -215,7 +334,7 @@ data Token =
   | TokenArr
   | TokenPar
   | TokenBra
-  | TokenSel
+  | TokenSel Int
   | TokenGrd
   | TokenSeq
   | TokenRep
@@ -230,91 +349,130 @@ data Token =
   | TokenEof
   | TokenCurlyo
   | TokenCurlyc
-        deriving (Show)
+  | TokenLet
+  | TokenAnd
+  | TokenIn
+  | TokenDo
+  | TokenMap
+  deriving (Show)
 
 lexer :: (Token -> Ptype a) -> Ptype a
-lexer cont s l c =
+lexer cont s (l, c) (l',c') =
+  -- (l,c) is the currently reached position in the parsing
+  -- (l',c') is the position of the last accepted token
   case s of
-    []                             -> (cont TokenEof) "" l c
-    '(':'o':')':r                  -> cont TokenEmp r l (c+3)
-    '.':'.':r                      -> (lexer cont) (dropWhile (\c->c/='\n') r) (l+1) 0
-    ' ':r                          -> (lexer cont) r l (c+1)
-    '\n':r                         -> (lexer cont) r (l+1) 0
-    '\t':r                         -> (lexer cont) r l (c+1)
-    '-':'>':r                      -> cont TokenArr r l (c+2)
-    '=':'>':r                      -> cont TokenMAr r l (c+2)
-    '|':r                          -> cont TokenPar r l (c+1)
-    '+':r                          -> cont TokenBra r l (c+1)
-    's':'e':'l':' ':r              -> cont TokenSel r l (c+4)
-    's':'e':'l':'\n':r             -> cont TokenSel r (l+1) 0
-    's':'e':'l':'\t':r             -> cont TokenSel r l (c+4)
-    'b':'r':'a':'n':'c':'h':' ':r  -> cont TokenSel r l (c+7)
-    'b':'r':'a':'n':'c':'h':'\n':r -> cont TokenSel r (l+1) 0
-    'b':'r':'a':'n':'c':'h':'\t':r -> cont TokenSel r l (c+7)
-    '*':r                          -> cont TokenSta r l (c+1)
-    'r':'e':'p':'e':'a':'t':' ':r  -> cont TokenRep r l (c+8)
-    'r':'e':'p':'e':'a':'t':'\n':r -> cont TokenRep r (l+1) 0
-    'r':'e':'p':'e':'a':'t':'\t':r -> cont TokenRep r l (c+8)
-    'u':'n':'l':'e':'s':'s':' ':r  -> cont TokenUnl r l (c+7)
-    'u':'n':'l':'e':'s':'s':'\t':r -> cont TokenUnl r (l+1) 0
-    'u':'n':'l':'e':'s':'s':'\r':r -> cont TokenUnl r l (c+7)
-    '%':r                          -> cont TokenGrd r l (c+1)
-    '@':r                          -> cont TokenUnt r l (c+1)
-    ':':r                          -> cont TokenSec r l (c+1)
-    ';':r                          -> cont TokenSeq r l (c+1)
-    ',':r                          -> cont TokenCom r l (c+1)
-    '(':r                          -> cont TokenBro r l (c+1)
-    ')':r                          -> cont TokenBrc r l (c+1)
-    '{':r                          -> cont TokenCurlyo r l (c+1)
-    '}':r                          -> cont TokenCurlyc r l (c+1)
-    '-':'-':'h':'s':'l':'-':'-':_  -> cont TokenEof [] l c
-    '[':r ->
-      let
-        tmp = L.takeWhile (\c -> c /= ']') r
-        r' = L.dropWhile (\c -> c /= ']') r
-        l' = l + L.length (L.filter (\c -> c == '\n') tmp)
-        c' = c + if l'==0 then (length tmp) else 0
-      in
-        if r' == ""
-        then Er (synErr l c "multiline comment not closed")
-        else lexer cont (tail r') l' c'
-    _                              -> (cont (TokenStr (fst s'))) (snd s') l (c + (length s'))
-        where s' = span isAlpha s
+    'b':'r':'a':'n':'c':'h':x:r ->
+      case x of
+        ' '  -> cont (TokenSel 6) r (l, (c+7)) (l, c)
+        '\t' -> cont (TokenSel 6) r (l, (c+7)) (l, c)
+        '{'  -> cont (TokenSel 6) ('{':r) (l, (c+6)) (l, c)
+        '\n' -> cont (TokenSel 6) r ((l+1), 0) (l, c)
+        _ -> (cont (TokenStr (fst s'))) (snd s') (l, (c + (length s'))) (l, c)
+    'r':'e':'p':'e':'a':'t':x:r ->
+      case x of
+        ' '  -> cont TokenRep r (l, (c+7)) (l, c)
+        '\t' -> cont TokenRep r (l, (c+7)) (l, c)
+        '{'  -> cont TokenRep ('{':r) (l, (c+6)) (l, c)
+        '\n' -> cont TokenRep r ((l+1), 0) (l, c)
+        _ -> (cont (TokenStr (fst s'))) (snd s') (l, (c + (length s'))) (l, c)
+    'u':'n':'l':'e':'s':'s':x:r ->
+      case x of
+        ' '  -> cont TokenUnl r (l, (c+7)) (l, c)
+        '\t' -> cont TokenUnl r (l, (c+7)) (l, c)
+        '{'  -> cont TokenUnl ('{':r) (l, (c+6)) (l, c)
+        '\n' -> cont TokenUnl r ((l+1), 0) (l, c)
+        _ -> (cont (TokenStr (fst s'))) (snd s') (l, (c + (length s'))) (l, c)
+    'l':'e':'t':x:r ->
+      case x of
+        ' '  -> cont TokenLet r (l, (c+4)) (l, c)
+        '\t' -> cont TokenLet r (l, (c+4)) (l, c)
+        '{'  -> cont TokenLet ('{':r) (l, (c+3)) (l, c)
+        '\n' -> cont TokenLet r ((l+1), 0) (l, c)
+        _ -> (cont (TokenStr (fst s'))) (snd s') (l, (c + (length s'))) (l, c)
+    's':'e':'l':x:r ->
+      case x of
+        ' '  -> cont (TokenSel 3) r (l, (c+4)) (l, c)
+        '\t' -> cont (TokenSel 3) r (l, (c+4)) (l, c)
+        '{'  -> cont (TokenSel 3) ('{':r) (l, (c+3)) (l, c)
+        '\n' -> cont (TokenSel 3) r ((l+1), 0) (l, c)
+        _ -> (cont (TokenStr (fst s'))) (snd s') (l, (c + (length s'))) (l, c)
+    '|':'-':'>':x:r ->
+      case x of
+        ' '  -> cont TokenMap r (l, (c+4)) (l, c)
+        '\t' -> cont TokenMap r (l, (c+4)) (l, c)
+        '{'  -> cont TokenMap ('{':r) (l, (c+3)) (l, c)
+        '\n' -> cont TokenMap r ((l+1), 0) (l, c)
+        _ -> (cont (TokenStr (fst s'))) (snd s') (l, (c + (length s'))) (l, c)
+    'i':'n':x:r ->
+      case x of
+        ' '  -> cont TokenIn r (l, (c+3)) (l, c)
+        '\t' -> cont TokenIn r (l, (c+3)) (l, c)
+        '{'  -> cont TokenIn ('{':r) (l, (c+2)) (l, c)
+        '\n' -> cont TokenIn r ((l+1), 0) (l, c)
+        _ -> (cont (TokenStr (fst s'))) (snd s') (l, (c + (length s'))) (l, c)
+    'd':'o':x:r ->
+      case x of
+        ' '  -> cont TokenDo r (l, (c+3)) (l, c)
+        '\t' -> cont TokenDo r (l, (c+3)) (l, c)
+        '{'  -> cont TokenDo ('{':r) (l, (c+2)) (l, c)
+        '\n' -> cont TokenDo r ((l+1), 0) (l, c)
+        _ -> (cont (TokenStr (fst s'))) (snd s') (l, (c + (length s'))) (l, c)
+    '(':'o':')':r ->
+      cont TokenEmp r (l, (c+3)) (l, c)
+    '.':'.':r ->
+      (lexer cont) (dropWhile (\c->c/='\n') r) (l, 0) (l',c')
+    '-':'>':r ->
+      cont TokenArr r (l, (c+2)) (l, c)
+    '=':'>':r ->
+      cont TokenMAr r (l, (c+2)) (l, c)
+    x:r ->
+      case x of
+        '&' -> cont TokenAnd r (l, (c+1)) (l, c)
+        '*' -> cont TokenSta r (l, (c+1)) (l, c)
+        '%' -> cont TokenGrd r (l, (c+1)) (l, c)
+        '@' -> cont TokenUnt r (l, (c+1)) (l, c)
+        ':' -> cont TokenSec r (l, (c+1)) (l, c)
+        ';' -> cont TokenSeq r (l, (c+1)) (l, c)
+        '|' -> cont TokenPar r (l, (c+1)) (l, c)
+        '+' -> cont TokenBra r (l, (c+1)) (l, c)
+        ',' -> cont TokenCom r (l, (c+1)) (l, c)
+        '(' -> cont TokenBro r (l, (c+1)) (l, c)
+        ')' -> cont TokenBrc r (l, (c+1)) (l, c)
+        '{' -> cont TokenCurlyo r (l, (c+1)) (l, c)
+        '}' -> cont TokenCurlyc r (l, (c+1)) (l, c)
+        '[' ->
+          let
+            tmp = L.takeWhile (\c -> c /= ']') r
+            r' = L.dropWhile (\c -> c /= ']') r
+            lskip = l + L.length (L.filter (\c -> c == '\n') tmp)
+            cskip = c + if lskip==0 then (length tmp) else 0
+          in
+            if r' == ""
+            then Er ("Syntax error at <" ++ (show $ l+1) ++ "," ++ (show $ c) ++ ">: " ++ "multiline comment not closed")
+            else lexer cont (tail r') (lskip, cskip) (l', c')
+        ' ' -> (lexer cont) r (l, (c+1)) (l', c')
+        '\t' -> (lexer cont) r (l, (c+1)) (l', c')
+        '\n' -> (lexer cont) r ((l+1), 0) (l', c')
+        _ -> (cont (TokenStr (fst s'))) (snd s') (l, (c + (length s'))) (l, c)
+    [] ->
+      (cont TokenEof) "" (l, c) (l',c')
+  where s' = span isAlpha s
 
 data ParseResult a =
   Ok a
   | Er String
   deriving (Show)
 
-type Ptype a = String -> Int -> Int -> ParseResult a
+type Ptype a = String -> (Int, Int) -> (Int, Int) -> ParseResult a
 
 parseError token =
-  \ _ l c ->
-    case token of
-      TokenStr s  -> Er (synErr l c "string format violation")
-      TokenEmp    -> Er (synErr l c "Unexpected (o)")
-      TokenArr    -> Er (synErr l c "Unexpected \'->\'")
-      TokenPar    -> Er (synErr l c "Unexpected gate \'|\'")
-      TokenBra    -> Er (synErr l c "Unexpected branch gate")
-      TokenSel    -> Er (synErr l c "Unexpected branch gate")
-      TokenSeq    -> Er (synErr l c "Unexpected \';\'")
-      TokenRep    -> Er (synErr l c "Unexpected loop")
-      TokenSta    -> Er (synErr l c "Unexpected loop")
-      TokenUnt    -> Er (synErr l c "Unexpected \'@\'")
-      TokenSec    -> Er (synErr l c "Unexpected \':\'")
-      TokenBro    -> Er (synErr l c "Unexpected \'(\'")
-      TokenBrc    -> Er (synErr l c "Unexpected \')\'")
-      TokenCom    -> Er (synErr l c "Unexpected \',\'")
-      TokenMAr    -> Er (synErr l c "Unexpected =>")
-      TokenUnl    -> Er (synErr l c "Unexpected \'unless\' clause")
-      TokenCurlyo -> Er (synErr l c "Unexpected \'{\'")
-      TokenCurlyc -> Er (synErr l c "Unexpected \'}\'")
-      TokenEof    -> Er (synErr l c "Parse error; perhaps an unexpected trailing symbol")
+  \ _ _ (l, c) ->
+    Er (synErr l c token)
 
 thenPtype :: Ptype a -> (a -> Ptype b) -> Ptype b
-m `thenPtype` k = \s l c ->
-  case m s l c of
-    Ok v -> k v s l c
+m `thenPtype` k = \s (l, c) (l', c') ->
+  case m s (l, c) (l', c') of
+    Ok v -> k v s (l, c) (l',c')
     Er e -> Er e
 
 returnPtype :: a -> Ptype a
@@ -325,24 +483,59 @@ failPtype err = \_ _ _ -> Er err
 
 -- GC specific functions
 
-synErr :: Int -> Int -> String -> String
-synErr l c err = "Syntax error at <" ++ (show l) ++ "," ++ (show $ c+1) ++ ">: " ++ err
+synErr :: Int -> Int -> Token -> String
+synErr l c token =
+  "Syntax error at <" ++ (show (l+1)) ++ "," ++ (show $ c+1) ++ ">: " ++ err
+  where
+    err =
+      case token of
+        TokenStr s  ->  "unexpected string or string format violation: " ++ s
+        TokenEmp    ->  "unexpected (o)"
+        TokenArr    ->  "unexpected \'->\'"
+        TokenPar    ->  "unexpected \'|\'"
+        TokenBra    ->  "unexpected \'+\'"
+        TokenSel o  ->  "unexpected branching start"
+        TokenGrd    ->  "unexpected guard"
+        TokenSeq    ->  "unexpected \';\'"
+        TokenRep    ->  "unexpected loop"
+        TokenSta    ->  "unexpected loop"
+        TokenUnt    ->  "unexpected \'@\'"
+        TokenSec    ->  "unexpected \':\'"
+        TokenBro    ->  "unexpected \'(\'"
+        TokenBrc    ->  "unexpected \')\'"
+        TokenCom    ->  "unexpected \',\'"
+        TokenMAr    ->  "unexpected =>"
+        TokenUnl    ->  "unexpected \'unless\' clause"
+        TokenCurlyo ->  "unexpected \'\'"
+        TokenAnd    ->  "unexpected \'&\'"
+        TokenLet    ->  "unexpected \'let\'"
+        TokenIn     ->  "unexpected \'in\'"
+        TokenDo     ->  "unexpected \'do\'"
+        TokenMap    ->  "unexpected \'|->\'"
+        TokenEof    ->  "Parse error; perhaps an unexpected trailing symbol"
+
 
 myErr :: String -> a
 myErr err = error ("gcparser: ERROR - " ++ err)
 
--- TODO: not used yet
-type Guards = M.Map Ptp String
-
-ptpsBranches :: [((GC, Set Ptp), Guards)] -> Set Ptp
+ptpsBranches :: [((GC, Set Ptp), ReversionGuard)] -> Set Ptp
+-- to be revised: also participants in constants to be taken
 ptpsBranches =
-  \l -> L.foldr S.union S.empty (L.map (\x -> snd $ fst x) l)
+  \l -> L.foldr S.union S.empty (L.map (snd . fst) l)
 
+checkGuard :: (GC, Set Ptp) -> ReversionGuard -> ((GC, Set Ptp), ReversionGuard)
+checkGuard gc@(g, ptps) m =
+  let
+    tmp = [ x | x <- M.keys m, not (S.member x ptps) ]
+  in
+    if L.null tmp
+    then (gc, m)
+    else myErr ("Unknown participant(s): " ++ (show tmp))
 
 -- checkToken 'flattens', parallel, branching, and sequential composition
 checkToken :: Token -> (GC, Set Ptp) -> [GC]
 checkToken t (g,_) =
-    case t of
+  case t of
     TokenPar -> case g of
       Par l -> l
       _ -> [g]
@@ -364,5 +557,13 @@ gcsptp ps g = case g of
                Seq gs      -> S.union ps (S.unions (L.map (gcsptp S.empty) gs))
                Rep g' p    -> S.union ps (gcsptp (S.singleton p) g')
 
-    
+compEnv :: GCEnv -> GCEnv -> GCEnv
+compEnv env env' =
+  let
+    common = M.intersection env env'
+  in
+    if (M.null common)
+    then M.union env env'
+    else myErr ("Double definition of constants: " ++ (mkSep (M.keys common) ", "))
+
 }

@@ -16,7 +16,7 @@ main = do
               getCmd WB progargs
         gctxt <- readFile sourcefile
         let ( gc, _ ) =
-              case gcgrammar gctxt 0 0 of
+              case gcgrammar gctxt (0, 0) (0, 0) of
                 Ok x -> x
                 Er err -> error err
         -- let (chk, aw) = 

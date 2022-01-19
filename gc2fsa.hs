@@ -25,7 +25,7 @@ main = do progargs <- getArgs
                     getCmd GC2FSA progargs
               gctxt <- readFile sourcefile
               let ( gc, names ) =
-                    case gcgrammar gctxt 0 0 of
+                    case gcgrammar gctxt (0, 0) (0, 0) of
                       Ok x -> x
                       Er err -> error err
               let ptps =

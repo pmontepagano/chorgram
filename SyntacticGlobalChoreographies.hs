@@ -15,8 +15,12 @@ import CFSM
 import DotStuff
 import Data.String.Utils (replace)
 
--- simple representation of labels for choices
+-- Simple representation of labels for choices
 type Label = Int
+
+-- Named g-choreographis
+type GCConst = String
+type GCEnv = Map GCConst (GC, Set Ptp)
 
 -- A syntactic global graph is a set of nodes, a source, a sink, and a
 -- set of edges We assume that cp's will be automatically generated

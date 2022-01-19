@@ -15,7 +15,7 @@ main = do
               getCmd PTPS progargs
         gctxt <- readFile sourcefile
         let ( _, ptps ) =
-              case gcgrammar gctxt 0 0 of
+              case gcgrammar gctxt (0, 0) (0, 0) of
                 Ok x -> x
                 Er err -> error err
         putStrLn $ S.foldr (\p p' -> if p' =="" then p else p ++ ", " ++ p') "" ptps

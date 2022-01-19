@@ -34,7 +34,7 @@ main = do progargs <- getArgs
               case flags!"--fmt" of
                 "gc" -> do
                   let ( gc, _ ) =
-                        case gcgrammar gctxt 0 0 of
+                        case gcgrammar gctxt (0, 0) (0, 0) of
                           Ok x -> x
                           Er err -> error err
                   output ("# Input @ " ++ sourcefile ++ "\n\n# " ++ show gc)

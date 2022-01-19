@@ -267,6 +267,15 @@ setFileNames f flags
 rmExtension :: String -> String -> String
 rmExtension ext s = if (L.drop i s == ext) then fst $ L.splitAt i s else s
   where i = L.length s - L.length ext
+
+fst3 :: (a,b,c) -> a
+fst3 (x,_,_) = x
+
+snd3 :: (a,b,c) -> b
+snd3 (_,x,_) = x
+
+thr3 :: (a,b,c) -> c
+thr3 (_,_,x) = x
   
 writeToFile :: FilePath -> String -> IO()
 writeToFile file content = writeFile file content
