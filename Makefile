@@ -57,7 +57,6 @@ all:
 	$(MAKE) gc2gml_hs &&\
 	$(MAKE) cg_hs
 	$(MAKE) ptps_hs
-	$(MAKE) gents_hs
 
 gmc_hs: gmc.hs SystemParser.hs FSA.hs CFSM.hs TS.hs Representability.hs Misc.hs DotStuff.hs BranchingProperty.hs PetrifyBridge.hs
 	$(ccmd) $<
