@@ -2,88 +2,106 @@
 -- Author: Emilio Tuosto <emilio.tuosto@gssi.it>
 --
 
--- A very basic grammar and parser for the textual editing of global
--- graphs. The grammar is a revised version of the one used in the
--- ICE16 paper with the extensions for reversibility-enabled graphs of
--- DAIS 18
---
---    G ::= (o)
---       |  P -> P : M
---       |  P => P, ..., P : M
---	 |  G | G
---       |  sel { Brc }
---       |  sel P { Brc }
---       |  branch { Brc }
---       |  branch P { Brc }
---       |  G ; G
---       |  * G @ P
---       |  repeat { G unless guard }
---       |  repeat P { G unless guard }
---       |  { G }
---       |  ( G )                        -- this is deprecated. For backward compatibility only
---
---    Brc   ::= G | G unless guard | B + B
---
---    guard ::= P % str | P % str, guard
---
--- where '(o)' has a special role: it marks a point where the selector
--- of a loop may exit the iteration. Guards are used only for the
--- reversible semantics and the string in them is supposed to be some
--- valid Erlang code. Likewise for the 'sel' construct, which
--- generalises the choice for the reversible semantics. Notice that
--- the 'sel' and the 'branch' constructs have the same semantics and
--- allow to specify the selector of the branch (to simplify the
--- realisation of projections on Erlang, the selector is mandatory for
--- REGs and optional otherwise). The clause 'unless guard' is optional
--- in branching and iteration.
---
--- The parser assumes the following equalities
---
---   sel P { G1 unless g1 + ... + Gn unless gn } = G1 + ... + Gn      for all guards g1, ..., gn 
---   repeat P {G unless g}                       = * G @ P
---
--- The binary operators _ | _, _ + _, and _ ; _ are given in ascending order of
--- precedence.
---
--- Note: strings are made of the following characters
---
---   0123456789
---   \_$#&~
---   ABCDEFGHIJKLMNOPQRSTUVWXYZ
---   abcdefghijklmnopqrstuvwxyz
---
--- and must start with a letter when specifying the identity of a
--- participant.
---
--- Reserved characters not allowed in strings are:
---
---   @ . , ; : ( ) [ ] { } | + * ! ? - % §
---
--- Text enclosed by '[' and ']' is treated as multi-line comment and,
--- after '..', so is the rest of a line.
---
--- Basic syntactic checks are made during the parsing (e.g, (i) that
--- sender and receiver of interactions have to be different and (2)
--- that the participant controlling a loop is active in the
--- loop). More checks are planned together with improved error
--- handling.
---
--- A rudimentary mechanism of definition of g-choreography constants
--- is provided by the following syntactic  construnct
---
---      let X1 |-> G1 & ... & Xn |-> Gn in G
---
--- where X1, ..., Xn are pairwise different and the set of equations
--- should not yield recursive definitions. To invoke a constant the
--- productions of G are extended as follows:
---
---       G ::= ...
---          |  do X
---
--- The parsers flags uses of g-choreography constants not defined in
--- G; likewise, for each 1 < i <= n, Gi can use only constants Xj with
--- j < i.
---
+{-
+  A very basic grammar and parser for the textual editing of global
+  graphs. The grammar is a revised version of the one used in the
+  ICE16 paper with the extensions for reversibility-enabled graphs of
+  DAIS 18
+
+     G ::= (o)
+        |  P -> P : M
+        |  P => P, ..., P : M
+	|  G | G
+        |  sel { Brc }
+        |  sel P { Brc }
+        |  branch { Brc }
+        |  branch P { Brc }
+        |  G ; G
+        |  * G @ P
+        |  repeat { G unless guard }
+        |  repeat P { G unless guard }
+        |  { G }
+        |  ( G )                        -- this is deprecated. For backward compatibility only
+
+     Brc   ::= G | G unless guard | B + B
+
+     guard ::= P % str | P % str, guard
+
+  where '(o)' has a special role: it marks a point where the selector
+  of a loop may exit the iteration. Guards are used only for the
+  reversible semantics and the string in them is supposed to be some
+  valid Erlang code. Likewise for the 'sel' construct, which
+  generalises the choice for the reversible semantics. Notice that
+  the 'sel' and the 'branch' constructs have the same semantics and
+  allow to specify the selector of the branch (to simplify the
+  realisation of projections on Erlang, the selector is mandatory for
+  REGs and optional otherwise). The clause 'unless guard' is optional
+  in branching and iteration.
+
+  The parser assumes the following equalities
+
+     sel P { G1 unless g1 + ... + Gn unless gn } = G1 + ... + Gn      for all guards g1, ..., gn 
+     repeat P {G unless g}                       = * G @ P
+
+  The binary operators _ | _, _ + _, and _ ; _ are given in ascending order of
+  precedence.
+
+  Note: strings are made of the following characters
+
+     0123456789
+     \_$#&~
+     ABCDEFGHIJKLMNOPQRSTUVWXYZ
+     abcdefghijklmnopqrstuvwxyz
+
+  and must start with a letter when specifying the identity of a
+  participant.
+
+  Reserved characters not allowed in strings are:
+
+     @ . , ; : ( ) [ ] { } | + * ! ? - % §
+
+  Text enclosed by '[[' and ']]' is treated as multi-line comment
+  and, after '..', so is the rest of a line.
+
+  Basic syntactic checks are made during the parsing (e.g, (i) that
+  sender and receiver of interactions have to be different and (2)
+  that the participant controlling a loop is active in the
+  loop). More checks are planned together with improved error
+  handling.
+
+
+  Extensions
+
+  - G-choreography contexts are introduced with the following syntax:
+
+       Ctx ::= [] | G
+            |  choiceop { [] + G }
+            |  choiceop { G + [] }
+            |  [] ; Ctx
+            |  Ctx ; []
+            |  repeat { [] }
+            |  { Ctx }
+
+    Contexts are instrumental to introduce a rudimentary mechanism of
+    definition of g-choreography constants and contexts is provided
+    by the following syntactic construct
+
+       let X_1 |-> Ctx_1 & ... & X_n |-> Ctx_n in G_1 | ... | G_m
+
+    where X_1, ..., X_n are pairwise different and the set of mappings
+    should not yield recursive definitions. To use a constant the
+    productions g-choreographies are extended as follows:
+
+       G ::= ...
+          |  do X
+          |  do X[G]
+
+    where 'do X = do X[(o)].
+
+    The parser flags uses in g-choreography of undefined constants;
+    likewise, the parser checks that Ctx_i uses only constants X_j
+    with j < i.
+-}
 
 {
 module GCParser where
@@ -346,7 +364,6 @@ data Token =
   | TokenCom
   | TokenMAr
   | TokenUnl
-  | TokenEof
   | TokenCurlyo
   | TokenCurlyc
   | TokenLet
@@ -354,6 +371,7 @@ data Token =
   | TokenIn
   | TokenDo
   | TokenMap
+  | TokenEof
   deriving (Show)
 
 lexer :: (Token -> Ptype a) -> Ptype a
@@ -425,6 +443,19 @@ lexer cont s (l, c) (l',c') =
       cont TokenArr r (l, (c+2)) (l, c)
     '=':'>':r ->
       cont TokenMAr r (l, (c+2)) (l, c)
+    '[':'[':r ->
+      let
+        takeComment acc s =
+          case s of
+            ']':']':_ -> acc
+            _ -> takeComment (acc ++ [head s]) (tail s)
+        tmp = takeComment "" r
+        lskip = l + L.length (L.filter (\c -> c == '\n') tmp)
+        cskip = 0 -- c + if lskip==0 then (length tmp) else 0
+      in
+        if tmp == r
+        then Er ("Syntax error at <" ++ (show $ l+1) ++ "," ++ (show $ c) ++ ">: " ++ "multiline comment not closed")
+        else lexer cont (tail $ tail (r \\ tmp)) (lskip, cskip) (l', c')
     x:r ->
       case x of
         '&' -> cont TokenAnd r (l, (c+1)) (l, c)
@@ -440,16 +471,6 @@ lexer cont s (l, c) (l',c') =
         ')' -> cont TokenBrc r (l, (c+1)) (l, c)
         '{' -> cont TokenCurlyo r (l, (c+1)) (l, c)
         '}' -> cont TokenCurlyc r (l, (c+1)) (l, c)
-        '[' ->
-          let
-            tmp = L.takeWhile (\c -> c /= ']') r
-            r' = L.dropWhile (\c -> c /= ']') r
-            lskip = l + L.length (L.filter (\c -> c == '\n') tmp)
-            cskip = c + if lskip==0 then (length tmp) else 0
-          in
-            if r' == ""
-            then Er ("Syntax error at <" ++ (show $ l+1) ++ "," ++ (show $ c) ++ ">: " ++ "multiline comment not closed")
-            else lexer cont (tail r') (lskip, cskip) (l', c')
         ' ' -> (lexer cont) r (l, (c+1)) (l', c')
         '\t' -> (lexer cont) r (l, (c+1)) (l', c')
         '\n' -> (lexer cont) r ((l+1), 0) (l', c')
@@ -489,8 +510,8 @@ synErr l c token =
   where
     err =
       case token of
-        TokenStr s  ->  "unexpected string or string format violation: " ++ s
-        TokenEmp    ->  "unexpected (o)"
+        TokenStr s  ->  "unexpected string or malformed string: " ++ s ++ "\n\t the following characters are forbidden: \'@\' \'.\' \',\' \';\' \':\' \'(\' \')\' \'[\' \']\' \'{\' \'}\' \'|\' \'+\' \'*\' \'!\' \'?\' \'-\' \'%\' \'§\'"
+        TokenEmp    ->  "unexpected \'(o)\'"
         TokenArr    ->  "unexpected \'->\'"
         TokenPar    ->  "unexpected \'|\'"
         TokenBra    ->  "unexpected \'+\'"
@@ -506,9 +527,10 @@ synErr l c token =
         TokenCom    ->  "unexpected \',\'"
         TokenMAr    ->  "unexpected =>"
         TokenUnl    ->  "unexpected \'unless\' clause"
-        TokenCurlyo ->  "unexpected \'\'"
-        TokenAnd    ->  "unexpected \'&\'"
+        TokenCurlyo ->  "unexpected \'{'"
+        TokenCurlyc ->  "unexpected \'}'"
         TokenLet    ->  "unexpected \'let\'"
+        TokenAnd    ->  "unexpected \'&\'"
         TokenIn     ->  "unexpected \'in\'"
         TokenDo     ->  "unexpected \'do\'"
         TokenMap    ->  "unexpected \'|->\'"

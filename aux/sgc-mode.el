@@ -54,7 +54,7 @@
 ;; SGC syntax highlighting
 (setq sgc-highlights
 	'(
-		("\\(\\.\\..*\\)\\|\\[\\(.\\|\n\\)*?\\]+" . font-lock-comment-face)
+		("\\(\\.\\..*\\)\\|\\[\\[\\(.\\|\n\\)*\\]\\]+" . font-lock-comment-face)
 		("[ \n\t]+?\\(do\\|in\\|let\\|repeat\\|branch\\|sel\\|unless\\)[ \n\t]+?" . sgc-kwd)
 		("^\\(do\\|in\\|let\\|repeat\\|branch\\|sel\\|unless\\)$" . sgc-kwd)
 		("^\\(do\\|in\\|let\\|repeat\\|branch\\|sel\\|unless\\)[ \t]+?" . sgc-kwd)
@@ -92,8 +92,8 @@
 					(">="  . 8805)    ; ≥
 					("map" . 8614)    ; ↦ 
 					("|->" . 8796)    ; ≜
-					("["  . 10214)
-					("]"  . 10215)
+					("[["  . 10214)
+					("]]"  . 10215)
 					("alpha" . 945)
 					("beta" . 946)
 					("gamma" . 947)
