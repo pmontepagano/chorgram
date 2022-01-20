@@ -72,19 +72,8 @@
 
   Extensions
 
-  - G-choreography contexts are introduced with the following syntax:
-
-       Ctx ::= [] | G
-            |  choiceop { [] + G }
-            |  choiceop { G + [] }
-            |  [] ; Ctx
-            |  Ctx ; []
-            |  repeat { [] }
-            |  { Ctx }
-
-    Contexts are instrumental to introduce a rudimentary mechanism of
-    definition of g-choreography constants and contexts is provided
-    by the following syntactic construct
+  - A rudimentary mechanism of definition of g-choreography constants
+    and contexts is provided by the following syntactic construct
 
        let X_1 |-> Ctx_1 & ... & X_n |-> Ctx_n in G_1 | ... | G_m
 
