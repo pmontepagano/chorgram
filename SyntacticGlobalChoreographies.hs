@@ -18,10 +18,6 @@ import Data.String.Utils (replace)
 -- Simple representation of labels for choices
 type Label = Int
 
--- Named g-choreographis
-type GCConst = String
-type GCEnv = Map GCConst (GC, Set Ptp)
-
 -- A syntactic global graph is a set of nodes, a source, a sink, and a
 -- set of edges We assume that cp's will be automatically generated
 -- (uniquely) during parsing
@@ -48,21 +44,18 @@ isEmp _ = False
 
 -- Other auxiliary operations
 
-ptpOf :: GC -> Set Ptp
-ptpOf gc =
+gcptps :: GC -> Set Ptp
+gcptps gc =
 --
 -- returns the set of participants of gc
 --
-  gcptp S.empty gc
-  where
-    gcptp ptps g =
-      case g of
-        Emp          -> ptps
-        Act (s,r) _  -> S.union ptps (S.fromList [s,r])
-        Par gs       -> S.union ptps (S.unions $ L.map (gcptp S.empty) gs)
-        Bra gs       -> S.union ptps (S.unions $ L.map (gcptp S.empty) (M.elems gs))
-        Seq gs       -> S.union ptps (S.unions (L.map (gcptp S.empty) gs))
-        Rep g' p     -> S.union ptps (gcptp (S.singleton p) g')
+  case gc of
+    Emp          -> S.empty
+    Act (s,r) _  -> S.fromList [s,r]
+    Par gs       -> L.foldr S.union S.empty (L.map gcptps gs)
+    Bra gs       -> L.foldr S.union S.empty (L.map gcptps (M.elems gs))
+    Seq gs       -> L.foldr S.union S.empty (L.map gcptps gs)
+    Rep g' p     -> S.insert p (gcptps g')
 
 loopBack :: State -> State
 loopBack q = "__l__" ++ q
@@ -203,7 +196,7 @@ proj gc q0 qe p n pmap =
         then (fst m, qe)
         else (dm qe Tau)
         where
-          ptpsloop = ptpOf g
+          ptpsloop = gcptps g
           suf = if n<0 then show (-n) else show n
           m =
             if n >= 0
@@ -244,10 +237,10 @@ proj gc q0 qe p n pmap =
                   (cfsmUnion q0 [cfsm_loop, cfsm_exit, cfsm_body], qe)
 
 projx :: Bool -> GC -> P -> Ptp -> State -> State -> Int -> (CFSM, State)
-projx loopFlag gg pmap p q0 qe n =
+projx loopFlag gc pmap p q0 qe n =
 --
--- PRE : actions are well formed (wffActions) ^ q0 /= qe ^ p is a participant of gg
--- POST: the non-minimised projection of gg wrt p and a unique exiting state (it must always exist!)
+-- PRE : actions are well formed (wffActions) ^ q0 /= qe ^ p is a participant of gc
+-- POST: the non-minimised projection of gc wrt p and a unique exiting state (it must always exist!)
 --       n is a counter for fresh state generation
 --       q0 and qe correspond to the entry and exit state, respectively
 --
@@ -258,7 +251,7 @@ projx loopFlag gg pmap p q0 qe n =
       taul l = ((show $ inverse!p, show $ inverse!p), l, "")
       tautrx = \q1 q2 l ->  S.singleton (q1, taul l, q2)
       dm q l = ((S.fromList [q0, q], q0, S.singleton (taul l), tautrx q0 q l), q)
-  in case gg of
+  in case gc of
       Emp ->
         if loopFlag
         then (dm (qe ++ "Break") BreakLoop)
@@ -304,9 +297,9 @@ projx loopFlag gg pmap p q0 qe n =
                   )
                   (0, q0, S.empty, S.empty, S.empty)
                   gcs
-      Rep g p' -> if (S.member p bodyptps) then (ggrep, qe') else (dm qe' Tau)
-        where bodyptps    = ptpOf g
-              ggrep       = (S.unions [statesOf body, statesOf loop, statesOf exit],
+      Rep g p' -> if (S.member p bodyptps) then (gcrep, qe') else (dm qe' Tau)
+        where bodyptps    = gcptps g
+              gcrep       = (S.unions [statesOf body, statesOf loop, statesOf exit],
                              initialOf body,
                              S.unions [actionsOf body, actionsOf loop, actionsOf exit],
                              S.unions [transitionsOf body, transitionsOf loop, transitionsOf exit]
@@ -332,7 +325,7 @@ node2dot n =
   (if n < 0 then "_" else "") ++ (show $ abs n)
       
 gc2dot :: GC -> String -> Map String String -> DotString
-gc2dot gg name flines =
+gc2dot gc name flines =
 --
 -- gc2dot transforms a GC in dot format giving it name 'name'
 -- and setting the size of nodes to 'nodeSize'
@@ -344,7 +337,7 @@ gc2dot gg name flines =
       where aux [] v = v + 1
             aux ((v', _):vs') v = aux vs' (max v v')
     dummyGC n = ([(n, branchV), (-n, mergeV)], [(n, -n)])
-    helper vs as gg_  =
+    helper vs as gc_  =
       let
         (sink, i) = (L.last vs, 1 + (maxIdx vs))
         attach idx idx' =
@@ -353,9 +346,9 @@ gc2dot gg name flines =
           [(idx', fst sink)]
         notgate = \v -> v /= i && v /= (-i)
       in
-        case gg_ of
+        case gc_ of
           Emp      -> (vs, as)
-          Act _ _  -> ((L.init vs) ++ [(i, dotLabelOf gg_ )] ++ [sink], attach i i)
+          Act _ _  -> ((L.init vs) ++ [(i, dotLabelOf gc_ )] ++ [sink], attach i i)
           Par gcs  ->
             ((L.init vs) ++ vs' ++ [sink], (attach i (-i)) ++ as')
             where
@@ -373,16 +366,16 @@ gc2dot gg name flines =
                 case gcs_ of
                   []       -> (vs_,as_)
                   Emp:gcs' -> graphy gcs' vs_ as_
-                  gg':gcs' -> graphy gcs' vs'' as''
+                  gc':gcs' -> graphy gcs' vs'' as''
                     where
-                      (vs0,as0)   = helper [(idx,""),(-idx,"")] [(idx,-idx)] gg'
+                      (vs0,as0)   = helper [(idx,""),(-idx,"")] [(idx,-idx)] gc'
                       (vs',as')   = renameVertex notgate (vs0,as0) (1 + maxIdx vs0)
                       (vs'',as'') = catPD (\(_,l) -> l /= "") (vs_,as_) (vs',as')
                       idx         = 1 + maxIdx vs_
-          Rep gg' _ -> ((L.init vs) ++ vs' ++ [sink], (attach i (-i)) ++ ((-i,i):as'))
+          Rep gc' _ -> ((L.init vs) ++ vs' ++ [sink], (attach i (-i)) ++ ((-i,i):as'))
             where
               (evs, eas) = dummyGC i
-              (vs', as') = helper evs eas gg'
+              (vs', as') = helper evs eas gc'
         where
           rename excluded offset pds =
             case pds of
@@ -396,13 +389,13 @@ gc2dot gg name flines =
     dotnodes vs  = L.concatMap (\(s, l) -> "\tnode" ++ (node2dot s) ++ l) vs
     dotedges as  = L.concatMap (\(s, t) -> "\tnode" ++ (node2dot s) ++ " -> node" ++ (node2dot t) ++ "\n") as
     (evs_, eas_) = ([(1, sourceV), (-1, sinkV)], [(1, -1)])
-    (vertexes, edges) = helper evs_ eas_ gg
+    (vertexes, edges) = helper evs_ eas_ gc
     (header,  footer) = ("digraph " ++ name ++ " {\n   node [width=" ++ nodeSize ++ ", height=" ++ nodeSize ++ "]\n\n", "\n}\n")
   in
     header ++ (dotnodes vertexes) ++ (dotedges edges) ++ footer
 
 dotLabelOf :: GC -> DotString
-dotLabelOf gg = case gg of
+dotLabelOf gc = case gc of
               Emp         -> sourceV
               Act (s,r) m -> " [label = \"" ++ s ++ " &rarr; " ++ r ++ " : " ++ m ++ "\", shape=rectangle, fontname=helvetica, fontcolor=MidnightBlue]\n"
               Par _       -> forkV
@@ -453,7 +446,7 @@ gmldata :: String -> String -> String
 gmldata k v = "      <data key=\"" ++ k ++ "\">" ++ v ++ "</data>\n"
 
 gmlLabelOf :: GC -> String
-gmlLabelOf gg = case gg of
+gmlLabelOf gc = case gc of
               Act (s,r) m -> (gmldata "sender" s ++ gmldata "receiver" r ++ gmldata "payload" m)
               _       -> ""
 
@@ -478,9 +471,9 @@ gmlrename excluded n j s =
     in replace ("<node id=\"" ++ (show n)) ("<node id=\"" ++ (show idn)) s
 
 gc2graphml :: GC -> String
-gc2graphml gg =
+gc2graphml gc =
 --
--- gc2dot gg name transforms a GC in dot format
+-- gc2dot gc name transforms a GC in dot format
 -- TODO: improve on fresh node generation
 --
   let header   = --"<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"no\"?>\n<graphml xmlns=\"http://graphml.graphdrawing.org/xmlns\" xmlns:java=\"http://www.yworks.com/xml/yfiles-common/1.0/java\" xmlns:sys=\"http://www.yworks.com/xml/yfiles-common/markup/primitives/2.0\" xmlns:x=\"http://www.yworks.com/xml/yfiles-common/markup/2.0\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:y=\"http://www.yworks.com/xml/graphml\" xmlns:yed=\"http://www.yworks.com/xml/yed/3\" xsi:schemaLocation=\"http://graphml.graphdrawing.org/xmlns http://www.yworks.com/xml/schema/graphml/1.1/ygraphml.xsd\">\n"
@@ -500,16 +493,16 @@ gc2graphml gg =
         where aux [] v = v + 1
               aux ((v', _):vs') v = aux vs' (max v v')
       dummyGC n = ([(n, gmlOpenGate n Loop), (-n, gmlCloseGate n Loop)], [(n, -n)])
-      helper vs as gg_  =
+      helper vs as gc_  =
         let (sink, i) = (L.last vs, 1 + (maxIdx vs))
             attach idx idx' =
               [(s, t)   | (s, t) <- as, t /= fst sink] ++
               [(s, idx) | (s, t) <- as, t == fst sink] ++
               [(idx', fst sink)]
             notgate = \v -> v /= i && v /= (-i)
-        in case gg_ of
+        in case gc_ of
           Emp -> (vs, as)
-          Act _ _  -> ((L.init vs) ++ [(i, gmlNode (gmlLabelOf gg_) i)] ++ [sink], attach i i)
+          Act _ _  -> ((L.init vs) ++ [(i, gmlNode (gmlLabelOf gc_) i)] ++ [sink], attach i i)
           Par gcs -> ((L.init vs) ++ vs' ++ [sink], (attach i (-i)) ++ as')
             where (vs', as') =
                     gather (gmlOpenGate i Fork)
@@ -528,15 +521,15 @@ gc2graphml gg =
                     case gcs_ of
                       []       -> (vs_,as_)
                       Emp:gcs' -> graphy gcs' vs_ as_
-                      gg':gcs' -> graphy gcs' vs'' as''
+                      gc':gcs' -> graphy gcs' vs'' as''
                         where (vs0,as0) =
-                                helper [(idx,""),(-idx,"")] [(idx,-idx)] gg'
+                                helper [(idx,""),(-idx,"")] [(idx,-idx)] gc'
                               (vs',as') = renameVertex notgate (vs0,as0) (1 + maxIdx vs0)
                               (vs'',as'') = catPD (\(_,l) -> l /= "") (vs_, as_) (vs', as')
                               idx = 1 + maxIdx vs_
-          Rep gg' _ -> ((L.init vs) ++ vs' ++ [sink], (attach i (-i)) ++ ((-i,i):as'))
+          Rep gc' _ -> ((L.init vs) ++ vs' ++ [sink], (attach i (-i)) ++ ((-i,i):as'))
             where (evs, eas) = dummyGC i
-                  (vs', as') = helper evs eas gg'
+                  (vs', as') = helper evs eas gc'
         where rename excluded offset pds =
                 case pds of
                   [] -> []
@@ -548,7 +541,7 @@ gc2graphml gg =
       gmlNodes vs  = L.concatMap (\(_, s) -> s) vs
       gmlEdges as  = L.concatMap (\(s, t) -> gmlEdge s t) as
       (evs_, eas_) = ([(1, (gmlOpenGate 1 Source)), (-1, gmlCloseGate 1 Sink)], [(1, -1)])
-      (vertexes, edges) = helper evs_ eas_ gg
+      (vertexes, edges) = helper evs_ eas_ gc
   in header ++
      ogate ++
      cgate ++

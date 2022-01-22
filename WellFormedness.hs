@@ -221,6 +221,9 @@ wsAux gc gc' =
   -- because the check that minimal imputs of gc' depend on some
   -- output of gc is done syntactically instead of using pomsets.
   --
+  -- (isEmp $ simplifyGC gc) ||
+  -- (isEmp $ simplifyGC gc') ||
+  -- (inCond && L.all outCond ps')
   if (isEmp $ simplifyGC gc) || (isEmp $ simplifyGC gc')
   then Nothing
   else
@@ -228,10 +231,10 @@ wsAux gc gc' =
       (sem, e') = pomsetsOf gc 1 0
       (sem', _) = pomsetsOf gc' 1 (e'+1)
       (ps, ps') = (S.toList $ sem, S.toList $ sem')
-      ptpgc = ptpOf gc
+      ptpgc = gcptps gc
       inCond =
         let
-          ptps = ptpOf gc
+          ptps = gcptps gc
           min = interactionsOf $ firstOnly gc'
           aux (Act (s,r) _ ) =
             (S.member r ptps) || (S.member s ptps)
@@ -326,7 +329,7 @@ wb gc =
         Nothing -> Nothing
         _ -> Just (L.foldr (\l l' -> l ++ "\n" ++ l') "" [x | (Just x) <- (L.filter (\x -> x /= Nothing) (L.map wb gs))])
     Bra gcs ->
-      let ptps = ptpOf gc
+      let ptps = gcptps gc
           gcs' = M.map simplifyGC gcs
           getActive = S.filter (\p -> naiveWB Active p gcs') ptps
           getPassive = S.filter (\p -> naiveWB Passive p gcs') ptps
