@@ -56,6 +56,8 @@ pomsetsOf gg iter e =
         if n==0
         then Emp
         else Seq (L.replicate (abs n) g)
+      -- TODO: uniform unfoldind for the moment.
+      --       Eventually to generate random numbers between 0 and iter.
   in
     case gg of
       Emp -> emptySem e
@@ -64,6 +66,7 @@ pomsetsOf gg iter e =
            lab = M.fromList [(e, (c, Send, m)), (e+1, (c, Receive, m) )]
            interactionPom = (S.fromList [e, e+1], (S.singleton (e, e+1)), lab)
         in (S.singleton interactionPom, e+2)
+--      LAct c m -> pomsetsOf (Act c m) iter e
       Par ggs ->
         (combine (tail pomsets) (head pomsets), e'')
         where (pomsets, e'') = L.foldl aux ([], e) ggs
@@ -97,6 +100,15 @@ pomsetsOf gg iter e =
           g':ggs' -> (S.map seqLeq (sprod p' p''), e'')
             where (p', e') = pomsetsOf g' iter e
                   (p'', e'') = pomsetsOf (Seq ggs') iter e'
+                  -- pseq (pom@(events, rel, lab), pom'@(events', rel', lab')) =
+                  --   (S.union events events',
+                  --    S.union (seqrel pom pom') (S.union rel rel'),
+                  --    M.union lab lab')
+                  -- seqrel (events, _, lab) (events', _, lab') =
+                  --   S.filter (\(e1,e2) -> case (M.lookup e1 lab, M.lookup e2 lab') of
+                  --                           (Just x, Just y) -> subjectOf x == subjectOf y
+                  --                           _                -> False
+                  --            ) (sprod events events')
       Rep gg' _ -> pomsetsOf (unfold gg' iter) iter e
 
 seqLeq :: (Pomset, Pomset) -> Pomset
@@ -122,6 +134,11 @@ getClosure evs p@(events, rel, _)=
   in if S.null new then
        evs
      else getClosure (S.union evs new) p
+
+-- getNonPred :: Event -> Pomset -> Set Event
+-- getNonPred e p@(events, rel, _) rel' =
+--   let rel' = reflexoTransitiveClosure (S.toList events) (S.toList rel)
+--   in dropElems (\e' -> (e',e) € rel') (maxOfPomset p)
 
 getNonPred :: Event -> Pomset -> [(Event, Event)] -> Set Event
 getNonPred e p rel = dropElems (\e' -> (e',e) € rel) (maxOfPomset p)
@@ -217,6 +234,9 @@ pomset2gg p@(_, _, lab) =
   in if S.null comps then
        Just Emp
      else
+       -- if L.foldr (\(e,e') b -> b || (not (S.member (e',e) (orderOf interactionsPomset)))) False (orderOf interactionsPomset) then
+       --   Nothing
+       -- else
          let tmp = S.foldr aux (Just []) comps
          in case tmp of
               Nothing -> Nothing
@@ -241,6 +261,7 @@ pomset2dot r name flines =
     edges = S.toList $ S.map mkEdge (orderOf r)
   in
     "digraph " ++ name ++ " {\n" ++
+    -- "\t[width=" ++ (flines!"nodesize") ++ ", height=" ++ (flines!"nodesize") ++ "]\n" ++
     (L.foldr (\x y -> "\t" ++ x ++ y) "\n" (nodes ++ edges)) ++
     "}\n" 
 
@@ -265,6 +286,10 @@ pomset2gml (events, rel, lab) =
                   _                        -> myError POM2GC ("Unknown action: " ++ (show (M.lookup e lab)))
   in mlpref ++ (L.foldr (++) "" (S.map nodeGL events)) ++ (L.foldr (++) "" (S.map edgeGL rel)) ++ mlsuff
 
+-- gml2pomset :: String -> Pomset
+-- gml2pomset s = emptyPom
+--   -- return the pomset from its gml representation
+--   where 
 
 checkTag :: QName -> String -> a -> a
 checkTag tag val expr =

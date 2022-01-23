@@ -39,6 +39,7 @@ main = do
               "det" -> (L.map FSA.determinise sys, basename ++ ".det")
               "no"  -> (sys, basename ++ ".hs")
               _     -> error ("value " ++ (flags!"-D") ++ " not appropriate for flag -D; use \"min\", \"det\", or \"no\"" )
+      -- writeToFile f (show sys')
       putStrLn $ show $  ptps
       putStrLn $ show $ M.elems flags
       writeToFile (basename ++ flags!"-D" ++ ".fsa") (system2String (sys', ptps))

@@ -3,6 +3,11 @@
 --
 -- Stuff about dealing CFSMs as FSA
 --
+-- TODO: the determinisation and minisation of CFSMs looses the
+--       information on the original states. Tracking states is
+--       probably necessary for future development.  Making the
+--       functions to return a map could fix this.
+--
 
 
 module FSA where
@@ -116,3 +121,6 @@ minimise m =
   where
     aux (states, q0, ls, trxs) =
       (S.map show states, show q0, ls, S.map (\(q,l,q') -> (show q, l, show q')) trxs)
+
+
+

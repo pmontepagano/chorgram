@@ -185,6 +185,7 @@ removeTranSplit s = let sp = SU.split "/" s in
   else s
 
 
+-- "p5", "alice0,bob0,0->1:bwin", "alice0,carol0,0->2:cwin" ---> { (p5,alice0,bob0,0->1:bwin) , (p5,alice0,carol0,0->2:cwin) }
 parseFlow :: Set Transition -> String -> [String] -> Set Flow
 parseFlow transs srcnode xs = S.fromList (L.map (\x -> consFlow srcnode x) xs)
   where consFlow s x = if isTrans x transs 

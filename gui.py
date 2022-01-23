@@ -421,8 +421,8 @@ class Workspace():
 class MainWindow(Gtk.Window):
 
     def __init__(self):
-        Gtk.Window.__init__(self, title="ChorGram 1.3")         # create main window
-        self.set_default_size(1000, 600)
+        Gtk.Window.__init__(self, title="ChorGram 1.0")         # create main window
+        self.set_default_size(800, 600)
         uimanager = self.create_ui_manager()                  	# and start UI manager
         self.workspace = None
         self.tree_mapping = {}                                  # reverse mapping for tree-vew
@@ -484,9 +484,20 @@ class MainWindow(Gtk.Window):
             Gtk.PolicyType.AUTOMATIC
         )
         self.vp.add2(self.scrolled_window)
-
-    def on_key_release(self, widget, event):
-        self.label.set_text(widget.get_text())
+        #
+        grid = Gtk.Grid()
+        grid.set_column_spacing(10)
+        box.add(grid)
+        #
+        entry = Gtk.Entry()
+        entry.connect("key-release-event", self.on_key_release)
+        #
+        grid.attach(entry, 0, 0, 1, 1)
+        #
+        self.label = Gtk.Label("xxx")
+        self.label.set_width_chars(15)
+        #
+        grid.attach(self.label, 1, 0, 1, 1)
 
     def on_tree_selection_changed(self, selection):
         model, treeiter = self.selection.get_selected()

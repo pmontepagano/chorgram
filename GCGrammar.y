@@ -475,8 +475,8 @@ applyEnvGC env g =
               gcs = M.fromList $ L.zip [0 .. length tmp] tmp
             in
               Bra gcs
---          Seq gs -> Seq (checkToken TokenSeq (Seq (L.foldr (++) [] (L.map (applyEnvGC env) gs))))
---          Rep g' ptp -> Rep (applyEnvGC env g') ptp
+          Seq gs -> Seq (checkToken TokenSeq (Seq (L.map (applyEnvGC env) gs)))
+          Rep g' ptp -> Rep (applyEnvGC env g') ptp
           _ -> g
 
 

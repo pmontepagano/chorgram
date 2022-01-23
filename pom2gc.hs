@@ -26,6 +26,14 @@ main = do
     let pomset = xgml2pomset xml
     let gg =
           pomset2gg pomset
+          -- let aux b ps i =
+          --       let (f, ext) = if flags!"--gml" == "yes"
+          --                      then (pomset2gml, ".graphml")
+          --                      else (show, ".txt")
+          --       in case ps of
+          --            [] -> return ()
+          --            p:ps' -> writeToFile (dir ++ b ++ (show i) ++ ext) (f p) >>= \_ -> aux b ps' (i+1)
+          -- aux baseName (S.toList pomsets) (0 :: Int)
     case gg of
       Nothing -> putStrLn "The pomset in not representable as global graph"
       Just gg' ->
