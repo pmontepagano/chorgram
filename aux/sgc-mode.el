@@ -55,10 +55,10 @@
 (setq sgc-highlights
 	'(
 		("\\(\\.\\..*\\)\\|\\[\\[\\(.\\|\n\\)*\\]\\]+" . font-lock-comment-face)
-		("[ \n\t]+?\\(do\\|in\\|let\\|repeat\\|branch\\|sel\\|unless\\)[ \n\t]+?" . sgc-kwd)
-		("^\\(do\\|in\\|let\\|repeat\\|branch\\|sel\\|unless\\)$" . sgc-kwd)
-		("^\\(do\\|in\\|let\\|repeat\\|branch\\|sel\\|unless\\)[ \t]+?" . sgc-kwd)
-		("[ \t]+\\(=>\\|\->\\|\|\->\\|\\*\\|\\+\\|\|\\|;\\|:\\|@\\|§\\|\(o\)\\|&\\)" . sgc-sym)
+		("[ \n\t[]+?\\(do\\|in\\|let\\|repeat\\|branch\\|sel\\|unless\\|with\\|be\\)[ \n\t]+?" . sgc-kwd)
+		("^\\(do\\|in\\|let\\|repeat\\|branch\\|sel\\|unless\\|with\\|be\\)$" . sgc-kwd)
+		("^\\(do\\|in\\|let\\|repeat\\|branch\\|sel\\|unless\\|with\\|be\\)[ \t]+?" . sgc-kwd)
+		("[ \t]+\\(=>\\|==\\|\->\\|\|\->\\|\\*\\|\\+\\|\|\\|;\\|:\\|@\\|§\\|\(o\)\\|&\\)" . sgc-sym)
 		("\{\\|\}\(\\|\)" . sgc-brk)
 		("[A-Z][a-zA-Z0-9]*" . sgc-ptp)
 		("[a-z][a-zA-Z0-9]*" . sgc-msg)
@@ -92,6 +92,7 @@
 					(">="  . 8805)    ; ≥
 					("map" . 8614)    ; ↦ 
 					("|->" . 8796)    ; ≜
+					("==" . 8796)    ; ≜
 					("[["  . 10214)
 					("]]"  . 10215)
 					("alpha" . 945)

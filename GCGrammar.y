@@ -9,7 +9,7 @@
 module GCParser where
 import SyntacticGlobalChoreographies
 import ErlanGC
-import Data.Set as S (empty, singleton, intersection, null, insert, union, unions, difference, fromList, difference, toList, member, foldr, Set)
+import Data.Set as S (empty, insert, union, fromList, toList, member, map, Set)
 import Data.List as L
 import qualified Data.Map as M
 import Misc
@@ -27,7 +27,7 @@ import CFSM
   '(o)'         { TokenEmp      }
   '->'	     	{ TokenArr      }
   '=>'	        { TokenMAr      }
-  '|->'	     	{ TokenMap      }
+  '='	     	{ TokenEq       }
   '|'	        { TokenPar      }
   '+'	        { TokenBra      }
   '%'	        { TokenGrd      }
@@ -48,6 +48,7 @@ import CFSM
   'let'         { TokenLet      }
   'in'          { TokenIn       }
   'do'          { TokenDo       }
+  'with'        { TokenWith     }
   '[]'          { TokenHole     }
 
 %right '|'
@@ -88,10 +89,15 @@ E : 'let' A 'in' { $2 emptyEnv }
 
 
 A :: { GCEnv -> GCEnv }
-A : str '|->' Ctx
-    { \env -> (insEnv $1 $3 env) }
-  | A '&' str '|->' Ctx
-    { \env -> insEnv $3 $5 (compEnv env ($1 emptyEnv)) }
+A : str R '=' Ctx
+    { \env -> (insEnv $1 $2 $4 env) }
+  | A '&' str R '=' Ctx
+    { \env -> insEnv $3 $4 $6 (compEnv env ($1 emptyEnv)) }
+
+
+R :: { [String] }
+R : '@' ptps { $2 }
+  |  {- empty -}  { [] }
 
 
 Ctx :: { GCEnv -> GCCtx }
@@ -99,12 +105,16 @@ Ctx : '[]'  { \_ -> Hole }
     | 'do' call
       { \env ->
           let
-            const = fst $2
+            (const, (g, _), params) = $2 env
+            (ctx, formals) = env M.! const 
+            m = M.fromList (L.zip formals params)
+            g' = applyEnvGC env g
           in
-            if M.member const env
-            then env M.! const
-            else myErr ("Constant " ++ const ++ " is undefined")
-      }
+            case (checkParameters formals params, M.member const env) of
+              (Just err, _) -> myErr err
+              (_, True) -> substx m $ fillx env g' ctx
+              _ -> myErr ("Use of undefined constant: " ++ const)
+       }
     | str '->' str ':' str
       { \_ ->
           case ((isPtp $1), (isPtp $3), ($1 == $3)) of
@@ -128,6 +138,14 @@ Ctx : '[]'  { \_ -> Hole }
       { \env ->
           Seqx (checkTokenx TokenSeq (Seqx [$1 env, $3 env]))
       }
+    | choiceop '{' Brxs '}'
+      { \env ->
+          let
+            range = [1 .. length $3]
+            brcs = M.fromList $ L.zip range (L.map (\x -> x env) $3)
+          in
+            Brax (M.fromList $ L.zip range (checkTokenx TokenBra (Brax brcs)))
+      }
     | Ctx '|' Ctx
       { \env ->
           Parx (checkTokenx TokenPar (Parx [$1 env, $3 env]))
@@ -147,6 +165,11 @@ Ctx : '[]'  { \_ -> Hole }
   | '{' Ctx '}'  { $2 }
 
 
+Brxs :: { [GCEnv -> GCCtx] }
+Brxs : Ctx  { [$1] }
+     | Ctx '+' Brxs  { $1:$3 }
+
+
 B :: { GCEnv -> (GC, Set Ptp) }
 B : S  { $1 }
   | choiceop '{' Br '+' Bs '}'
@@ -155,7 +178,7 @@ B : S  { $1 }
             branches = L.map fst ([$3 env] ++ ($5 env))
             aux g l = l ++ (checkToken TokenBra (fst g))
             tmp = L.foldr aux [] branches
-            gcs = M.fromList $ L.zip [0 .. length tmp] tmp
+            gcs = M.fromList $ L.zip [1 .. length tmp - 1] tmp
           in
            Bra gcs,
           ptpsBranches ([$3 env] ++ ($5 env))
@@ -223,12 +246,16 @@ Blk : str '->' str ':' str
   | 'do' call
     { \env ->
         let
-          (const, (g, ptps)) = $2
-          ctx = (env M.! const)
-          ptps' = S.union ptps (ctxptps ctx)
-          g' = fill env (applyEnvGC env g) ctx
+          (const, (g, ptps), params) = $2 env
+          (ctx, formals) = (env M.! const)
+          m = M.fromList (L.zip formals params)
+          g' = subst m (fill env (applyEnvGC env g) ctx)
+          ptps' = S.map (rename m) $ S.union ptps (ctxptps ctx)
         in
-          (g', ptps')
+          case (checkParameters formals params, M.member const env) of
+            (Just err, _) -> myErr err
+            (_, True) -> (g', ptps')
+            _ -> myErr ("Use of undefined constant: " ++ const)
     }
   | '*' GE '@' str
     { -- Note the difference with Ctx on the checks
@@ -237,7 +264,7 @@ Blk : str '->' str ':' str
           (g, ptps) = $2 env
         in
           case ((isPtp $4), (S.member $4 ptps)) of
-            (True, True)  -> (Rep g $4 , S.union (S.singleton $4) ptps)
+            (True, True)  -> (Rep g $4 , S.insert $4 ptps)
             (False, _)    -> myErr ("Malformed participant name: " ++ $4)
             (True, False) -> myErr ("Participant " ++ $4 ++ " is not among the loop's participants: " ++ (show $ toList ptps))
     }
@@ -247,18 +274,26 @@ Blk : str '->' str ':' str
           (g, ptps) = $4 env
         in
           case ((isPtp $2), (S.member $2 ptps)) of
-            (True, True)  -> (Rep g $2 , S.union (S.singleton $2) ptps)
+            (True, True)  -> (Rep g $2 , S.insert $2 ptps)
             (False, _)    -> myErr ("Malformed participant name: " ++ $2)
             (True, False) -> myErr ("Participant " ++ $2 ++ " is not among the loop's participants: " ++ (show $ toList ptps))
     }
   | '{' GE '}'  { $2 }
 
 
-call :: { (GCConst, (GC, Set Ptp)) }
-call : str
-       { ($1, (Emp, S.empty)) }
-     | str '[' G ']'
-       { ($1, $3) } 
+call :: { GCEnv -> (GCConst, (GC, Set Ptp), [String]) }
+call : str params
+       { \_ -> ($1, (Emp, S.empty), $2) }
+     | str '[' GE ']' params
+       { \env -> ($1, $3 env, $5) }
+
+params :: { [String] }
+params : 'with' strs  { $2 }
+       | {- empty -}  { [] }
+
+strs :: { [String] }
+strs : str  { [$1] }
+     | str ',' strs  { $1:$3 }
 
 guard :: { M.Map String String }
 guard : 'unless' str '%' str
@@ -308,7 +343,8 @@ data Token =
   | TokenAnd
   | TokenIn
   | TokenDo
-  | TokenMap
+  | TokenWith
+  | TokenEq
   | TokenHole
   | TokenEof
   deriving (Show)
@@ -353,13 +389,6 @@ lexer cont s (l, c) (l',c') =
         '{'  -> cont (TokenSel 3) ('{':r) (l, (c+3)) (l, c)
         '\n' -> cont (TokenSel 3) r ((l+1), 0) (l, c)
         _ -> (cont (TokenStr (fst s'))) (snd s') (l, (c + (length s'))) (l, c)
-    '|':'-':'>':x:r ->
-      case x of
-        ' '  -> cont TokenMap r (l, (c+4)) (l, c)
-        '\t' -> cont TokenMap r (l, (c+4)) (l, c)
-        '{'  -> cont TokenMap ('{':r) (l, (c+3)) (l, c)
-        '\n' -> cont TokenMap r ((l+1), 0) (l, c)
-        _ -> (cont (TokenStr (fst s'))) (snd s') (l, (c + (length s'))) (l, c)
     'i':'n':x:r ->
       case x of
         ' '  -> cont TokenIn r (l, (c+3)) (l, c)
@@ -373,6 +402,13 @@ lexer cont s (l, c) (l',c') =
         '\t' -> cont TokenDo r (l, (c+3)) (l, c)
         '{'  -> cont TokenDo ('{':r) (l, (c+2)) (l, c)
         '\n' -> cont TokenDo r ((l+1), 0) (l, c)
+        _ -> (cont (TokenStr (fst s'))) (snd s') (l, (c + (length s'))) (l, c)
+    'w':'i':'t':'h':x:r ->
+      case x of
+        ' '  -> cont TokenWith r (l, (c+5)) (l, c)
+        '\t' -> cont TokenWith r (l, (c+5)) (l, c)
+        '{'  -> cont TokenWith ('{':r) (l, (c+4)) (l, c)
+        '\n' -> cont TokenWith r ((l+1), 0) (l, c)
         _ -> (cont (TokenStr (fst s'))) (snd s') (l, (c + (length s'))) (l, c)
     '(':'o':')':r ->
       cont TokenEmp r (l, (c+3)) (l, c)
@@ -407,6 +443,7 @@ lexer cont s (l, c) (l',c') =
         '|' -> cont TokenPar r (l, (c+1)) (l, c)
         '+' -> cont TokenBra r (l, (c+1)) (l, c)
         ',' -> cont TokenCom r (l, (c+1)) (l, c)
+        '=' -> cont TokenEq r (l, (c+1)) (l, c)
         '{' -> cont TokenCurlyo r (l, (c+1)) (l, c)
         '}' -> cont TokenCurlyc r (l, (c+1)) (l, c)
         '[' -> cont TokenCtxo r (l, (c+1)) (l, c)
@@ -450,7 +487,7 @@ failPtype err = \_ _ _ -> Er err
 type GCConst = String
 
 
-type GCEnv = M.Map GCConst GCCtx
+type GCEnv = M.Map GCConst (GCCtx, [String])
 emptyEnv :: GCEnv 
 emptyEnv = M.empty
 
@@ -459,20 +496,18 @@ applyEnvGC env g =
   {- PRE: for all x in M.keys env, env ! x is a constant-free context
 
      POST: substitute the uses in g of constants in M.keys env with
-           the corresponding definition in env
+           the corresponding definition in env and passes parameters
   -}
-  L.foldr (\const -> aux const) g (M.keys env)
+  (L.foldr (\const -> aux const) g (M.keys env))
     where
       aux :: GCConst -> GC -> GC
       aux const = \c ->
         case c of
-          -- Do const g' -> aux const (fill env g' (env M.! const))
-          -- Do _ _ -> myErr ("Use of undefined constant: " ++ const)
           Par gs -> Par (checkToken TokenPar (Par (L.map (applyEnvGC env) gs)))
           Bra brc ->
             let
               tmp = L.foldr (++) [] (L.map (checkToken TokenBra) (M.elems brc))
-              gcs = M.fromList $ L.zip [0 .. length tmp] tmp
+              gcs = M.fromList $ L.zip [1 .. length tmp] tmp
             in
               Bra gcs
           Seq gs -> Seq (checkToken TokenSeq (Seq (L.map (applyEnvGC env) gs)))
@@ -481,7 +516,7 @@ applyEnvGC env g =
 
 
 data GCCtx = Hole
-  | Dox GCConst GCCtx
+  | Dox GCConst ([String]) GCCtx
   | Parx [GCCtx]
   | Brax (M.Map Label GCCtx)
   | Seqx [GCCtx]
@@ -501,17 +536,34 @@ compEnv env env' =
     else myErr ("Double definition of constants: " ++ (mkSep (M.keys common) ", "))
 
 
-compCtx :: GCCtx -> GCCtx -> GCCtx
-compCtx ctx ctx' =
--- replace the holes in ctx with ctx'
-  case ctx of
-    Hole -> ctx'
-    Parx ctxs -> Parx (L.map (\c -> compCtx c ctx') ctxs)
-    Brax ctxs -> Brax (M.map (\c -> compCtx c ctx') ctxs)
-    Seqx ctxs -> Seqx (L.map (\c -> compCtx c ctx') ctxs)
-    Repx ctx'' ptp -> Repx (compCtx ctx'' ctx') ptp
-    _ -> ctx
+compCtx :: (GCCtx, [String]) -> ([String]) -> GCCtx -> GCCtx
+compCtx (ctx, formals) params ctx' =
+-- replace the holes in ctx with ctx' and formal parameters with params
+  case checkParameters formals params of
+    Just err -> myErr err
+    _ ->
+      let
+         m = M.fromList (L.zip formals params)
+       in
+         case ctx of
+           Hole -> ctx'
+           Parx ctxs -> Parx (L.map (\c -> compCtx (c, formals) params ctx') ctxs)
+           Brax ctxs -> Brax (M.map (\c -> compCtx (c, formals) params ctx') ctxs)
+           Seqx ctxs -> Seqx (L.map (\c -> compCtx (c, formals) params ctx') ctxs)
+           Repx ctx'' ptp -> Repx (compCtx (ctx'', formals) params ctx') ptp
+           Actx (s,r) msg -> Actx (rename m s, rename m r) (rename m msg)
+           Dox const params' ctx'' -> Dox const (L.map (rename m) params') ctx''
 
+checkParameters :: [String] -> [String] -> Maybe String
+checkParameters formals params =
+  case (formals, params) of
+    (p:formals', p':params') ->
+      if (isPtp p) && (isPtp p')
+      then checkParameters formals' params'
+      else Just ("Participants cannot be messages and viceversa: " ++ (show p) ++ (show p'))
+    ([], _:_) -> Just ("Not enough formal parameters: " ++ (mkSep params ", ") ++ " cannot replace " ++ (mkSep formals ", "))
+    (_:_, []) -> Just ("Not enough actual parameters: " ++ (mkSep params ", ") ++ " cannot replace " ++ (mkSep formals ", "))
+    _ -> Nothing
 
 applyEnvCtx :: GCEnv -> GCCtx -> GCCtx
 applyEnvCtx env ctx =
@@ -525,17 +577,40 @@ applyEnvCtx env ctx =
       aux :: GCConst -> GCCtx -> GCCtx
       aux const = \c ->
         case c of
-          Dox const ctx' -> aux const (compCtx (env M.! const) ctx')
-          Dox _ _ -> myErr ("Use of undefined constant: " ++ const)
+          Dox const params ctx' ->
+            aux const (compCtx (env M.! const) params ctx')
+          Dox _ _ _ -> myErr ("Use of undefined constant: " ++ const)
           Parx ctxs -> Parx (L.map (applyEnvCtx env) ctxs)
           Brax brc -> Brax (M.map (applyEnvCtx env) brc)
           Seqx ctxs -> Seqx (L.map (applyEnvCtx env) ctxs)
           Repx ctx' ptp -> Repx (applyEnvCtx env ctx') ptp
-          _ -> c 
+          Actx _ _ -> c
+          Empx -> c
+          _ -> c
 
+substx :: M.Map String String -> GCCtx -> GCCtx
+substx m ctx =
+  case ctx of
+    Dox const params ctx' -> Dox const (L.map (rename m) params) (substx m ctx')
+    Parx ctxs -> Parx (L.map (substx m) ctxs)
+    Brax brc -> Brax (M.map (substx m) brc)
+    Seqx ctxs -> Seqx (L.map (substx m) ctxs)
+    Repx ctx' ptp -> Repx (substx m ctx') ptp
+    Actx (s,r) msg -> Actx (rename m s, rename m r) (rename m msg)
+    Empx -> Empx
 
-insEnv :: GCConst -> (GCEnv -> GCCtx) -> GCEnv -> GCEnv
-insEnv const absCtx env =
+subst :: M.Map String String -> GC -> GC
+subst m g =
+  case g of
+    Par gcs -> Par (L.map (subst m) gcs)
+    Bra brc -> Bra (M.map (subst m) brc)
+    Seq gcs -> Seq (L.map (subst m) gcs)
+    Rep gc' ptp -> Rep (subst m gc') ptp
+    Act (s,r) msg -> Act (rename m s, rename m r) (rename m msg)
+    Emp -> Emp
+
+insEnv :: GCConst -> ([String]) -> (GCEnv -> GCCtx) -> GCEnv -> GCEnv
+insEnv const params absCtx env =
   {- PRE: for all x in M.keys env, env ! x is a constant-free context
 
      POST: insert in env the constant-free version of (absCtx env)
@@ -549,7 +624,9 @@ insEnv const absCtx env =
       ctx = absCtx env
       ctx' = applyEnvCtx env ctx
     in
-      M.insert const ctx' env
+      case checkDuplicates params of
+        Just err -> myErr err
+        _ -> M.insert const (ctx', params) env
 
 
 ctxptps :: GCCtx -> Set Ptp
@@ -573,13 +650,35 @@ fill env g ctx =
 -- replace the holes in ctx with gc
   case ctx of
     Hole -> g
-    Dox const _ -> myErr ("???" ++ "impossible invocation of " ++ const)
+    Dox const _ _ -> myErr ("???" ++ "impossible invocation of " ++ const)
     Parx ctxs -> Par (L.map (fill env g) ctxs)
     Brax ctxs -> Bra (M.map (fill env g) ctxs)
     Seqx ctxs -> Seq (L.map (fill env g) ctxs)
     Repx ctx' ptp -> Rep (fill env g ctx') ptp
-    Actx ch m -> Act ch m
+    Actx c m -> Act c m
     Empx -> Emp
+
+fillx :: GCEnv -> GC -> GCCtx -> GCCtx
+fillx env g ctx =
+  case ctx of
+    Hole -> contexify g
+    Dox const _ _ -> myErr ("???" ++ "impossible invocation of " ++ const)
+    Parx ctxs -> Parx (L.map (fillx env g) ctxs)
+    Brax ctxs -> Brax (M.map (fillx env g) ctxs)
+    Seqx ctxs -> Seqx (L.map (fillx env g) ctxs)
+    Repx ctx' ptp -> Repx (fillx env g ctx') ptp
+    _ -> ctx
+
+contexify :: GC -> GCCtx
+contexify g =
+  case g of
+    Par gcs -> Parx (L.map contexify gcs)
+    Bra brc -> Brax (M.map contexify brc)
+    Seq gcs -> Seqx (L.map contexify gcs)
+    Rep gc' ptp -> Repx (contexify gc') ptp
+    Act c m -> Actx c m
+    Emp -> Empx
+
 
 
 synErr :: Int -> Int -> Token -> String
@@ -593,7 +692,7 @@ synErr l c token =
         TokenArr    ->  "unexpected \'->\'"
         TokenPar    ->  "unexpected \'|\'"
         TokenBra    ->  "unexpected \'+\'"
-        TokenSel o  ->  "unexpected branching start"
+        TokenSel o  ->  "unexpected " ++ (if o == 6 then "branch" else "sel")
         TokenGrd    ->  "unexpected \'unless\'"
         TokenSeq    ->  "unexpected \';\'"
         TokenRep    ->  "unexpected loop \'repeat\'"
@@ -611,24 +710,32 @@ synErr l c token =
         TokenAnd    ->  "unexpected \'&\'"
         TokenIn     ->  "unexpected \'in\'"
         TokenDo     ->  "unexpected \'do\'"
+        TokenWith   ->  "unexpected \'with\'"
         TokenHole   ->  "unexpected \'[]\'"
-        TokenMap    ->  "unexpected \'|->\'"
+        TokenEq     ->  "unexpected \'=\'"
         TokenEof    ->  "Perhaps an unexpected trailing symbol"
 
-{- 
-data ErrType =
-  Name
-  | Str
-  | Sender
-  | Receiver
-  | NoReceiver
-  | Def
-  | Use
-  | Unkown
--}
 
 myErr :: String -> a
 myErr err = error ("gcparser: ERROR - " ++ err)
+
+
+checkDuplicates :: [String] -> Maybe String
+checkDuplicates l =
+  case l of
+    [] -> Nothing
+    p:l' ->
+      if (L.elem p l')
+      then Just ("Duplicated parameter: " ++ (show p))
+      else checkDuplicates l'
+
+
+rename :: M.Map String String -> String -> String
+rename m x =
+  if L.elem x (M.keys m)
+  then m M.! x
+  else x
+
 
 ptpsBranches :: [((GC, Set Ptp), ReversionGuard)] -> Set Ptp
 -- to be revised: also participants in constants to be taken
@@ -765,7 +872,7 @@ checkTokenx t ctx =
     definition of g-choreography constants and contexts is provided
     by the following syntactic construct
 
-       let X_1 |-> Ctx_1 & ... & X_n |-> Ctx_n in G_1 | ... | G_m
+       let X_1 = Ctx_1 & ... & X_n = Ctx_n in G_1 | ... | G_m
 
     where X_1, ..., X_n are pairwise different and the set of mappings
     should not yield recursive definitions. To use a constant the
