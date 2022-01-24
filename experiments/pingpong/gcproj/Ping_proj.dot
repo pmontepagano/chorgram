@@ -1,0 +1,23 @@
+digraph all{
+
+
+subgraph Ping {
+	label="Ping"
+	Ping0	[style=filled, color=cornflowerblue]
+	Ping0	[label = "Ping0"];
+	Ping1	[label = "Ping1"];
+	Ping2	[label = "Ping2"];
+	Ping3	[label = "Ping3"];
+	Ping4	[label = "Ping4"];
+	Ping5	[label = "Ping5"];
+	Ping0 -> Ping4	[label = "Ping&middot;Pong ! __e__qe0"];
+	Ping0 -> Ping5	[label = "Ping&middot;Pong ! __l__q0"];
+	Ping1 -> Ping0	[label = "Pong&middot;Ping ? pong"];
+	Ping3 -> Ping2	[label = "Pong&middot;Ping ? bye"];
+	Ping4 -> Ping3	[label = "Ping&middot;Pong ! bye"];
+	Ping4 -> Ping3	[label = "Ping&middot;Pong ! finished"];
+	Ping5 -> Ping1	[label = "Ping&middot;Pong ! ping"];
+
+}
+}
+

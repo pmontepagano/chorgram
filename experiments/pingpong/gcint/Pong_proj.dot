@@ -1,0 +1,24 @@
+digraph all{
+
+
+subgraph Pong {
+	label="Pong"
+	Pong0	[style=filled, color=cornflowerblue]
+	Pong0	[label = "Pong0"];
+	Pong1	[label = "Pong1"];
+	Pong2	[label = "Pong2"];
+	Pong3	[label = "Pong3"];
+	Pong4	[label = "Pong4"];
+	Pong5	[label = "Pong5"];
+	Pong0 -> Pong3	[label = "Ping&middot;Pong ? __e__qe0"];
+	Pong0 -> Pong4	[label = "Ping&middot;Pong ? __l__q0"];
+	Pong1 -> Pong0	[label = "Pong&middot;Ping ! pong"];
+	Pong3 -> Pong5	[label = "Ping&middot;Pong ? bye"];
+	Pong3 -> Pong5	[label = "Ping&middot;Pong ? finished"];
+	Pong4 -> Pong1	[label = "Ping&middot;Pong ? ping"];
+	Pong5 -> Pong2	[label = "Pong&middot;Ping ! bye"];
+	Pong5 -> Pong2	[label = "Pong&middot;Pong &tau; "];
+
+}
+}
+

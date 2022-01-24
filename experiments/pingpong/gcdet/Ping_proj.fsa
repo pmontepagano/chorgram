@@ -1,0 +1,16 @@
+
+
+.outputs Ping
+.state graph
+0 1 ! __e__qe0 4
+0 1 ! __l__q0 5
+1 1 ? pong 0
+2 1 ? bye 3
+4 1 ! bye 2
+4 1 ! finished 2
+5 1 ! ping 1
+.marking 0
+.end
+
+
+

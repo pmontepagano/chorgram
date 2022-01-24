@@ -1,0 +1,22 @@
+
+strict digraph "" {
+	graph [edge_default="{}",
+		node_default="{}"
+	];
+	node [label="\N"];
+subgraph cluster_Ping {0	[label="PingPong!ping"];}
+subgraph cluster_Pong {1	[label="PingPong?ping"];}
+subgraph cluster_Pong {2	[label="PongPing!pong"];}
+subgraph cluster_Ping {3	[label="PongPing?pong"];}
+subgraph cluster_Ping {4	[label="PingPong!bye"];}
+subgraph cluster_Pong {5	[label="PingPong?bye"];}
+subgraph cluster_Pong {6	[label="PongPing!bye"];}
+subgraph cluster_Ping {7	[label="PongPing?bye"];}
+0 -> 1;
+1 -> 2;
+2 -> 3;
+3 -> 4;
+4 -> 5;
+5 -> 6;
+6 -> 7;
+}

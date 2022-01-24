@@ -1,0 +1,32 @@
+# Input @ /home/em/choreographies/stable_chorgram/experiments/pingpong.gc
+
+# Seq [Rep (Seq [Act ("Ping","Pong") "ping",Act ("Pong","Ping") "pong"]) "Ping",Bra (fromList [(0,Seq [Act ("Ping","Pong") "bye",Act ("Pong","Ping") "bye"]),(1,Seq [Act ("Ping","Pong") "finished",Emp])])]
+digraph pingpong {
+   node [width=0.2, height=0.2]
+
+	node1 [label="", shape=circle, fixedsize=true]
+	node5 [label="+", shape=diamond, fixedsize=true, fillcolor=papayawhip, style=filled, fontsize=10, fontcolor=sienna]
+	node9 [label = "Ping &rarr; Pong : ping", shape=rectangle, fontname=helvetica, fontcolor=MidnightBlue]
+	node13 [label = "Pong &rarr; Ping : pong", shape=rectangle, fontname=helvetica, fontcolor=MidnightBlue]
+	node_5 [label="+", shape=diamond, fixedsize=true, fillcolor=sienna, style=filled, fontsize=10, fontcolor=papayawhip]
+	node17 [label="+", shape=diamond, fixedsize=true, fillcolor=papayawhip, style=filled, fontsize=10, fontcolor=sienna]
+	node38 [label = "Ping &rarr; Pong : bye", shape=rectangle, fontname=helvetica, fontcolor=MidnightBlue]
+	node42 [label = "Pong &rarr; Ping : bye", shape=rectangle, fontname=helvetica, fontcolor=MidnightBlue]
+	node65 [label = "Ping &rarr; Pong : finished", shape=rectangle, fontname=helvetica, fontcolor=MidnightBlue]
+	node_17 [label="+", shape=diamond, fixedsize=true, fillcolor=sienna, style=filled, fontsize=10, fontcolor=papayawhip]
+	node_1 [label="", shape=circle, width=0.15, height=0.15, fixedsize=true, peripheries=2]
+	node1 -> node5
+	node_5 -> node5
+	node5 -> node9
+	node9 -> node13
+	node13 -> node_5
+	node_5 -> node17
+	node17 -> node38
+	node38 -> node42
+	node42 -> node_17
+	node17 -> node65
+	node65 -> node_17
+	node_17 -> node_1
+
+}
+

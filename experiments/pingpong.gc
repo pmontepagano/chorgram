@@ -1,4 +1,4 @@
-.. An simple example based on a sort of ping-pong protocol
+.. A simple example based on a sort of ping-pong protocol
 
 repeat Ping {					... after a few ping-pong exchanges
   Ping -> Pong: ping ;

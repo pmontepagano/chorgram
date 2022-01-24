@@ -1,0 +1,26 @@
+digraph ICTS {
+graph [bgcolor="transparent", bb=10];
+
+
+subgraph ts{
+"__start" [shape = "none"; label="";]
+{rank = same "__start" "0_0"}
+	"0_0"			[label="0&bull;0"];
+	"1_1"			[label="1&bull;1"];
+	"2_2"			[label="2&bull;2"];
+	"3_3"			[label="3&bull;3"];
+	"4_4"			[label="4&bull;4"];
+	"5_5"			[label="5&bull;5"];
+
+}{
+"__start" -> "0_0" [arrowhead=dot; label=""; penwidth=5; color=cornflowerblue]
+	"0_0" -> "5_5"			[label="Ping&rarr;Pong:ping"];
+	"2_2" -> "1_1"			[label="Pong&rarr;Ping:bye"];
+	"3_3" -> "2_2"			[label="Ping&rarr;Pong:bye"];
+	"3_3" -> "2_2"			[label="Ping&rarr;Pong:finished"];
+	"4_4" -> "0_0"			[label="Ping&rarr;Pong:*<1"];
+	"4_4" -> "3_3"			[label="Ping&rarr;Pong:>*1"];
+	"5_5" -> "4_4"			[label="Pong&rarr;Ping:pong"];
+
+}}
+
