@@ -171,13 +171,13 @@
 					(setq cur-indent 0)
 				(progn
 					;; Check for rule 2
-					(if (looking-at ".*\\(\}[ \t;]*\\|in[ \t\{\(]*\\)$")
+					(if (looking-at ".*\\(\}[ \t;]*\\|in[ \t\{\(]*\\|&\\)$")
 							(setq cur-indent (mydiff (get-previous-indent) sgc-indent-offset))
 						;; otherwise, check for rule 3
 						(progn
 							(save-excursion
 								(forward-line -1)
-								(if (looking-at ".*\\(\{\\|in\\|let\\)$")
+								(if (looking-at ".*\\(\{\\|in\\|let\\|=\\|\\[\\)$")
 										(setq cur-indent (+ (current-indentation) sgc-indent-offset))
 									;; otherwise, apply rule 4
 									(setq cur-indent (current-indentation))

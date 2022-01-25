@@ -9,7 +9,8 @@
 module GCParser where
 import SyntacticGlobalChoreographies
 import ErlanGC
-import Data.Set as S (empty, insert, union, fromList, toList, member, map, Set)
+import Data.Set as S (empty, insert, union, fromList, toList, member, Set)
+import qualified Data.Set as S (map)
 import Data.List as L
 import qualified Data.Map as M
 import Misc
@@ -178,7 +179,7 @@ B : S  { $1 }
             branches = L.map fst ([$3 env] ++ ($5 env))
             aux g l = l ++ (checkToken TokenBra (fst g))
             tmp = L.foldr aux [] branches
-            gcs = M.fromList $ L.zip [1 .. length tmp - 1] tmp
+            gcs = M.fromList $ L.zip [1 .. length tmp] tmp
           in
            Bra gcs,
           ptpsBranches ([$3 env] ++ ($5 env))
