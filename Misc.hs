@@ -25,6 +25,7 @@ data Command =
   | GC2DOT
   | GC2FSA
   | PROJ
+  | UNFOLD
   | PTPS
   | GC2POM
   | GENTS
@@ -334,6 +335,9 @@ info =
             "\t\t(-p option must be at the end of the command)"
          ]
   ),
+  (UNFOLD, ["unfolds a g-choreography",
+           "n filename"]
+  ),
   (PTPS, ["returns the list of participants of a g-choreography",
           "ptps [-v] filename",
             "\t -v diplays the mapping index |--> ptp"
@@ -366,8 +370,10 @@ info =
             "default: iter = 1"
            ]
   ),
-  (SYS, ["prints the haskell data structure corresponding to a communicating system",
-         "filename"
+  (SYS, ["parses a system and prints it various formats",
+         "sysparser [--fmt (hs | dot)] [-v] [-sn] filename",
+         "\t -sn standard names of states (q<int>); set by default",
+         "\t --fmt system in fsa or cms format; default --fmt dot"
         ]
   ),
   (MIN, ["determinises or minimises CFSMs",
@@ -439,6 +445,7 @@ cmdName cmd =
     GC2DOT -> "gc2dot"
     GC2FSA -> "gc2fsa"
     PROJ   -> "project"
+    UNFOLD -> "gcunfold"
     GC2POM -> "gc2pom"
     GENTS  -> "gents"
     POM2GC -> "pom2gc"
@@ -477,12 +484,13 @@ defaultFlags cmd =
                  GC2DOT -> [("--fmt","gc")]
                  GC2FSA -> [("-u", "-1")]
                  PROJ   -> [("-D","no"), ("-u", "-1"), ("--fmt", "fsa")]
+                 UNFOLD -> []
                  PTPS   -> []
                  GC2POM -> [("--fmt", "hs"), ("-u","1")]
                  GENTS  -> [("--fmt", "fsa"), ("-b", "0"), ("-D","no")]
                  POM2GC -> []
                  GC2GML -> [("-u","1")] -- '-l' unfolding of loops
-                 SYS    -> []
+                 SYS    -> [("--fmt", "dot"), ("-sn", "yes")]
                  MIN    -> [("-D","min")]
                  WB     -> []
                  WS     -> []
@@ -564,15 +572,20 @@ getFlags cmd args =
       "-D":y:xs     -> M.insert "-D" y (getFlags cmd xs)
       "-u":y:xs     -> M.insert "-u" y (getFlags cmd xs)
       _             -> error $ usage(cmd)
+    UNFOLD -> case args of
+      []            -> defaultFlags(cmd)
+      "-v":xs       -> M.insert "-v" yes (getFlags cmd xs)
+      _             -> error $ usage(cmd)
     PTPS -> case args of
       []            -> defaultFlags(cmd)
       "-v":xs       -> M.insert "-v" yes (getFlags cmd xs)
       _             -> error $ usage(cmd)
     SYS -> case args of
-      []        -> defaultFlags(cmd)
-      "-d":y:xs -> M.insert "-d" y    (getFlags cmd xs)
-      "-v":xs   -> M.insert "-v" yes (getFlags cmd xs)
-      _         -> error $ usage(cmd)
+      []           -> defaultFlags(cmd)
+      "--fmt":y:xs -> M.insert "--fmt" y (getFlags cmd xs)
+      "-sn":xs     -> M.insert "-sn" yes (getFlags cmd xs)
+      "-v":xs      -> M.insert "-v" yes (getFlags cmd xs)
+      _            -> error $ usage(cmd)
     MIN -> case args of
       []        -> defaultFlags(cmd)
       "-d":y:xs -> M.insert "-d" y   (getFlags cmd xs)
@@ -627,7 +640,6 @@ getFlags cmd args =
 --
 -- Some utilities on graphs
 --
-
 
 fanOut :: Ord vertex => Ord label => Graph vertex label -> vertex -> Set (Edge vertex label)
 fanOut ( _, _, _, trxs ) q = S.filter (\(x,_,_) -> x == q) trxs
@@ -711,6 +723,16 @@ gtarget :: Edge vertex label -> vertex
 gtarget (_, _, v) = v
 
 -- Some utilities
+
+notNothing :: Eq a => Maybe a -> Bool
+notNothing = \x -> x /= Nothing
+
+fstJust :: Eq a => [Maybe a] -> Maybe a
+fstJust l =
+  case l of
+    [] -> Nothing
+    Nothing : l' -> fstJust l'
+    x : _ -> x
 
 sn states =
   -- standard renaming of CFSMs' states

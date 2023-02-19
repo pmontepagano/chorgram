@@ -1,0 +1,71 @@
+#!/usr/bin/python3
+
+##
+# Author: Emilio Tuosto <emilio.tuosto@gssi.it>
+#
+# This script takes a cfsm in .fsa format and returns it in dot
+# format. For example
+#
+#   > chorgram cfsm2dot file.fsa
+#
+# yields the dot format without changing the names of states while
+#
+#   > chorgram cfsm2dot q file.fsa
+#
+# changes the names of states in q0, q1, etc.
+#
+##
+
+import os
+import sys
+
+def getCFSM(fileName):
+    """Reads the file"""
+    try:
+        with open(fileName, 'r') as f:
+            lines = f.readlines()
+    except Exception as exp:
+        print('\tProblems in accessing file %s; defaulting to machine' % fileName)
+        print(exp)
+        lines = []
+    trxs = [l[:-1] for l in lines if '!' in l or '?' in l]
+    nodes = [l.split(' ')[1][:-1] for l in lines if 'marking' in l]
+    for t in trxs:
+        s = t.split(' ')
+        source = s[0]
+        target = s[-1]
+        for x in [source, target]:
+            if not(x in nodes):
+                nodes.append(x)
+    return (nodes, trxs)
+
+def dotAct(s):
+    """Transforms s in a label for dot transitions"""
+    return "%s&middot;%s %s %s" % ("M" if s[2] == "!" else s[1], s[1] if s[2] == "!" else "M", s[2], s[3])
+
+def main():
+    """Usage: cfsm2dot [anything] filename.fsa to generate the dot format of a CFSM in fsa format. Use any optional argument to rename states"""
+    name = sys.argv[1] if len(sys.argv) > 2 else ""
+    (states, trxs) = getCFSM(sys.argv[-1])
+    nodes = {}
+    aux = lambda x: name + str(states.index(x))
+    for q in states:
+        nodes[q] = q if name == "" else aux(q)
+    preamble = "digraph CFSMs {\n\t" +\
+        "graph [color=white ratio=compress margin=0];\n\t" +\
+        "subgraph cluster{\n\t\t" +\
+        "label = M;\n\t\t"+\
+        nodes[states[0]] + "\t[style=filled, color=cornflowerblue]\n\t\t"
+    dottrxs = []
+    for t in trxs:
+        s = t.split(' ')
+        dt = "%s -> %s\t[label = \"%s\"];" % (nodes[s[0]], nodes[s[-1]], dotAct(s))
+        dottrxs.append(dt)
+    print(preamble + '\n\t\t'.join(dottrxs) + "\n\t}\n}")
+
+
+if __name__ == '__main__':
+    main()
+
+
+

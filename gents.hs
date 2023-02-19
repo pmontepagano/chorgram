@@ -16,11 +16,6 @@ import DotStuff
 import System.Environment
 import System.Directory
 import FSA
------------ import Representability
------------ import BranchingProperty
------------ import PetrifyBridge
------------ import Control.Concurrent
------------ import Control.Monad
 
 main :: IO ()
 main =  do
@@ -30,7 +25,7 @@ main =  do
     else do
       let (sourcefile, flags) =
             getCmd GENTS progargs
-      let (dir, _, _, ext) =
+      let (_, _, _, ext) =
             setFileNames sourcefile flags
       cm <- readFile sourcefile
       flinesIO <- getDotConf
@@ -50,3 +45,4 @@ main =  do
       let flags' = M.insert "-cp" "" (M.insert "-tp" "- - - -" (M.insert "-p" "" flags))
       let (cs, es, ts) = generate bufferSize fifo system [initConf system] S.empty (S.empty, S.empty, S.empty)
       putStrLn $ ts2String flines "" sourcefile bufferSize fifo system (cs, (initConf system), es, ts) flags' []
+      
