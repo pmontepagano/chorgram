@@ -5,6 +5,7 @@
 -- This module contains the main to generate the choreography
 --
 
+module BuildGlobal where
 import System.Environment
 import System.FilePath.Posix
 import PetriNet
