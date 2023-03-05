@@ -48,3 +48,27 @@ Thumbs.db
 *.mov
 *.wmv
 
+# Compiled Haskell object and interface files
+*.o
+*.hi
+
+# Chorgram executables
+chorgram
+gc2dot
+gc2fsa
+gc2gml
+gc2pom
+gmc
+pom2gc
+project
+ptps
+sysparser
+wb
+wf
+ws
+
+# Happy generated files
+GCParser.hs
+GCParser.info
+SystemParser.hs
+SystemParser.info

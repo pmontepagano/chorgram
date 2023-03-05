@@ -1,137 +1,56 @@
-#########################################################################
-# Dockerfile for testing and development of ChorGram.
-# 
-# Install Docker for your platform from https://docs.docker.com/install/
-#
-# Build the image with:
-#
-#   $ docker build -t chorgram .
-# 
-# The execution of the previous command may take a while (it is
-# downloading and installing libraries, external tools, etc.).
-#
-# If the above command returns an error, you may want to execute
-#
-#   $ sudo adduser <your_user_ID> docker
-#
-# log out and then re-login (this allows non-sudo users to run Docker)
-#
-# To open a shell with the toolchain you can use:
-#
-#   $ docker run -v $PWD:/chorgram --rm -it chorgram bash
-# 
-# Using the GUI from a container is a little bit more involved, but
-# you can try with the following.
-# 
-# Linux
-# -----
-# docker run --rm -it \ 
-#     -v $PWD:/chorgram \ 
-#     -v /tmp/.X11-unix:/tmp/.X11-unix \
-#     -e DISPLAY=$DISPLAY \
-#     chorgram python3 cc/gui.py
-# 
-# MacOS
-# -----
-# Install XQuartz from https://www.xquartz.org/
-# You need to set the DISPLAY environment variable 
-# to correctly point to your X Server.
-# 
-# docker run --rm -it \ 
-#     -v $PWD:/chorgram \
-#     -e DISPLAY=$(ipconfig getifaddr en0):0 \ 
-#     chorgram python3 cc/gui.py
-# 
-# In this case, you might need to unrestrict access to the X Server
-# The simplest way (though not the most secure) might be just running
-# `xhost +`
-# 
-#################################################################
-
-FROM ubuntu:20.04
+FROM haskell:9-slim-buster as haskell-builder
 
 ENV DEBIAN_FRONTEND=noninteractive
-
 RUN apt-get update \
    && apt-get -y install --no-install-recommends \
-      git \
-      openssh-client \
-      wget \
-      make \
-      locales \
-      haskell-platform \
-      graphviz \
-      libgraphviz-dev \
-      gobject-introspection \ 
-      gir1.2-gtk-3.0 \
-      libcairo2-dev \
-      # pyenv build dependencies
-      build-essential \
-      ca-certificates \
-      curl \
-      git \
-      libbz2-dev \
-      libffi-dev \
-      libncurses5-dev \
-      libncursesw5-dev \
-      libreadline-dev \
-      libsqlite3-dev \
-      libssl-dev \
-      liblzma-dev \
-      llvm \
-      make \
-      netbase \
-      pkg-config \
-      tk-dev \
-      wget \
-      xz-utils \
-      zlib1g-dev \
-      libgirepository1.0-dev \
-      ## HKC deps
-      ocamlbuild \
-      ocaml-nox \
+    # HKNT build requirements
+    ocamlbuild \
+    ocaml-nox \
    # Clean up
    && apt-get autoremove -y \
    && apt-get clean -y \
    && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
-ENV DEBIAN_FRONTEND=dialog
 
-ENV LANG="C.UTF-8" \
-    LC_ALL="C.UTF-8" \
-    PATH="/opt/pyenv/shims:/opt/pyenv/bin:$PATH" \
-    PYENV_ROOT="/opt/pyenv" \
-    PYENV_SHELL="bash"
+RUN mkdir -p /chorgram/aux
+WORKDIR /chorgram/aux
+RUN curl http://perso.ens-lyon.fr/damien.pous/hknt/hknt-1.0.tar.bz2 --output hknt-1.0.tar.bz2 \
+    && echo "b4620745e8e6453811cffb998e9ed78f626c8b5e53a186d35484e613e0877ad6779621555e2e5732d8ea237217acaf6dcba969327da3c47035818795b89b7562  hknt-1.0.tar.bz2" | sha512sum --check \
+    && tar xf hknt-1.0.tar.bz2 \
+    && rm hknt-1.0.tar.bz2 \
+    && cd hknt-1.0 \
+    && make && cd /chorgram/aux
 
-# External tools
-RUN wget http://perso.ens-lyon.fr/damien.pous/hknt/hknt-1.0.tar.bz2 \
-   && tar xf hknt-1.0.tar.bz2 \
-   && rm hknt-1.0.tar.bz2 
+RUN curl https://www.lsi.upc.edu/\~jordicf/petrify/distrib/petrify-5.2-linux.tar.gz --output petrify-5.2-linux.tar.gz \
+    && echo "157dbad34dccc7ed6bcb4a7e5a5d20ab52ebc49656c53645d18cf01dc1916eaf284cbcd02147500ec15804de08152c7e4f0bef78ed36cb2911c7093bc43c4769  petrify-5.2-linux.tar.gz" | sha512sum --check \
+    && tar xf petrify-5.2-linux.tar.gz \
+    && rm petrify-5.2-linux.tar.gz
 
-RUN wget https://www.lsi.upc.edu/\~jordicf/petrify/distrib/petrify-5.2-linux.tar.gz \
-   && tar xf petrify-5.2-linux.tar.gz \
-   && rm petrify-5.2-linux.tar.gz
+WORKDIR /chorgram
 
-# Haskell libs
 RUN cabal update \
-   && cabal install MissingH hxt
-
-# Extra Python libs
-RUN git clone --single-branch --depth 1 https://github.com/pyenv/pyenv.git $PYENV_ROOT
-RUN pyenv install 3.8.6
-RUN pyenv global 3.8.6
-
-RUN pip3 install poetry
-RUN poetry config virtualenvs.create false
-
-# RUN opam init --comp 1.2.2
-# RUN echo "eval `opam config env`" >> ~/.bashrc
+   && cabal install --lib MissingH hxt \
+   && cabal install happy
 
 ADD . /chorgram
-WORKDIR /chorgram
 
 RUN make setup
 
-RUN poetry install && pyenv rehash
-
-# Extend path
 ENV PATH="/chorgram:/chorgram/chortest:${PATH}"
+
+FROM python:3.11-slim-buster
+
+RUN apt-get update \
+    && apt-get -y install --no-install-recommends \
+        gcc \
+        gir1.2-gtk-3.0 \
+        gobject-introspection \
+        libcairo2-dev \
+        libgirepository1.0-dev \
+    && apt-get autoremove -y \
+    && apt-get clean -y \
+    && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+
+COPY requirements.txt .
+RUN pip install -r requirements.txt
+
+COPY --from=haskell-builder /chorgram /chorgram
