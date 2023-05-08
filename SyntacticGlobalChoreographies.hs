@@ -13,7 +13,7 @@ import Data.Map.Strict as M
 import Misc
 import CFSM
 import DotStuff
-import Data.String.Utils (replace)
+-- import Data.String.Utils (replace)
 
 -- Simple representation of labels for choices
 type Label = Int
@@ -462,96 +462,3 @@ gmlOpenGate idn gate = gmlNode (gmldata "open" (show gate)) idn
 gmlCloseGate :: Int -> GMLTAGS -> String
 gmlCloseGate idn gate = gmlNode (gmldata "close" (show gate)) (-idn)
 
-gmlrename :: (Int -> Bool) -> Int -> Int -> String -> String
-gmlrename excluded n j s =
-  if (excluded n)
-  then s
-  else
-    let idn = (if n > 0 then n + j else n - j)
-    in replace ("<node id=\"" ++ (show n)) ("<node id=\"" ++ (show idn)) s
-
-gc2graphml :: GC -> String
-gc2graphml gc =
---
--- gc2dot gc name transforms a GC in dot format
--- TODO: improve on fresh node generation
---
-  let header   = --"<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"no\"?>\n<graphml xmlns=\"http://graphml.graphdrawing.org/xmlns\" xmlns:java=\"http://www.yworks.com/xml/yfiles-common/1.0/java\" xmlns:sys=\"http://www.yworks.com/xml/yfiles-common/markup/primitives/2.0\" xmlns:x=\"http://www.yworks.com/xml/yfiles-common/markup/2.0\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:y=\"http://www.yworks.com/xml/graphml\" xmlns:yed=\"http://www.yworks.com/xml/yed/3\" xsi:schemaLocation=\"http://graphml.graphdrawing.org/xmlns http://www.yworks.com/xml/schema/graphml/1.1/ygraphml.xsd\">\n"
-        "<?xml version=\"1.0\" encoding=\"utf-8\"? standalone=\"no\">\n<graphml xmlns=\"http://graphml.graphdrawing.org/xmlns\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd\">\n"
-      ogate    = "  <key attr.name=\"open\" attr.type=\"string\" for=\"node\" id=\"open\" />\n"
-      cgate    = "  <key attr.name=\"close\" attr.type=\"string\" for=\"node\" id=\"close\" />\n"
-      sender   = "  <key attr.name=\"sender\" attr.type=\"string\" for=\"node\" id=\"sender\" />\n"
-      receiver = "  <key attr.name=\"receive`<r\" attr.type=\"string\" for=\"node\" id=\"receiver\" />\n"
-      payload  = "  <key attr.name=\"payload\" attr.type=\"string\" for=\"node\" id=\"payload\" />\n"
--- TODO: check that cc works as before commenting the next 3 lines
---      source   = ""--  <key attr.name=\"source\" attr.type=\"string\" for=\"node\" id=\"source\" />\n"
---      sink     = ""--"  <key attr.name=\"sink\" attr.type=\"string\" for=\"node\" id=\"sink\" />\n"
---      yattr    = ""--  <key for=\"node\" id=\"ylabel\" yfiles.type=\"nodegraphics\"/>"
-      edir     = "  <graph edgedefault=\"directed\">\n"
-      footer   = "  </graph>\n</graphml>\n"
-      maxIdx vs = aux vs 0
-        where aux [] v = v + 1
-              aux ((v', _):vs') v = aux vs' (max v v')
-      dummyGC n = ([(n, gmlOpenGate n Loop), (-n, gmlCloseGate n Loop)], [(n, -n)])
-      helper vs as gc_  =
-        let (sink, i) = (L.last vs, 1 + (maxIdx vs))
-            attach idx idx' =
-              [(s, t)   | (s, t) <- as, t /= fst sink] ++
-              [(s, idx) | (s, t) <- as, t == fst sink] ++
-              [(idx', fst sink)]
-            notgate = \v -> v /= i && v /= (-i)
-        in case gc_ of
-          Emp -> (vs, as)
-          Act _ _  -> ((L.init vs) ++ [(i, gmlNode (gmlLabelOf gc_) i)] ++ [sink], attach i i)
-          Par gcs -> ((L.init vs) ++ vs' ++ [sink], (attach i (-i)) ++ as')
-            where (vs', as') =
-                    gather (gmlOpenGate i Fork)
-                    (gmlCloseGate i Join)
-                    notgate
-                    i
-                    (rename (not.notgate) i graphs)
-                  graphs = (L.map (helper [(i, (gmlOpenGate i Fork)), ((-i), (gmlCloseGate i Join))] [(i, (-i))]) gcs)
-          Bra gcs -> ((L.init vs) ++ vs' ++ [sink], (attach i (-i)) ++ as')
-            where (vs', as') =
-                    gather (gmlOpenGate i Branch) (gmlCloseGate i Merge) notgate i (rename (not.notgate) i graphs)
-                  --graphs = S.toList (S.map (helper [(i, (gmlOpenGate i Branch)), ((-i), (gmlCloseGate i Merge))] [(i, (-i))]) gcs)
-                  graphs = M.elems (M.map (helper [(i, (gmlOpenGate i Branch)), ((-i), (gmlCloseGate i Merge))] [(i, (-i))]) gcs)
-          Seq gcs -> graphy gcs vs as
-            where graphy gcs_ vs_ as_ =
-                    case gcs_ of
-                      []       -> (vs_,as_)
-                      Emp:gcs' -> graphy gcs' vs_ as_
-                      gc':gcs' -> graphy gcs' vs'' as''
-                        where (vs0,as0) =
-                                helper [(idx,""),(-idx,"")] [(idx,-idx)] gc'
-                              (vs',as') = renameVertex notgate (vs0,as0) (1 + maxIdx vs0)
-                              (vs'',as'') = catPD (\(_,l) -> l /= "") (vs_, as_) (vs', as')
-                              idx = 1 + maxIdx vs_
-          Rep gc' _ -> ((L.init vs) ++ vs' ++ [sink], (attach i (-i)) ++ ((-i,i):as'))
-            where (evs, eas) = dummyGC i
-                  (vs', as') = helper evs eas gc'
-        where rename excluded offset pds =
-                case pds of
-                  [] -> []
-                  (vs1, as1):pds' -> ([(newNode excluded v offset, gmlrename excluded v offset l) | (v,l) <- vs1],
-                                      [(newNode excluded s offset, newNode excluded t offset) | (s,t) <- as1]) : (rename excluded (1 + offset + maxIdx vs1) pds')
-              gather gl gl' included idx pds =
-                ([(idx,gl)] ++ [(v,l) | (v,l) <- L.concat  $ L.map fst pds, (included v)] ++ [((-idx),gl')],
-                 L.concatMap snd pds)
-      gmlNodes vs  = L.concatMap (\(_, s) -> s) vs
-      gmlEdges as  = L.concatMap (\(s, t) -> gmlEdge s t) as
-      (evs_, eas_) = ([(1, (gmlOpenGate 1 Source)), (-1, gmlCloseGate 1 Sink)], [(1, -1)])
-      (vertexes, edges) = helper evs_ eas_ gc
-  in header ++
-     ogate ++
-     cgate ++
-     sender ++
-     receiver ++
-     payload ++
---     source ++
---     sink ++
---     yattr ++
-     edir ++
-     (gmlNodes vertexes) ++
-     (gmlEdges edges) ++
-     footer
